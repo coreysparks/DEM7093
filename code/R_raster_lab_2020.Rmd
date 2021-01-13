@@ -1,0 +1,200 @@
+---
+title: "DEM 7093 - Some Raster analysis using R"
+author: "Corey S. Sparks, PhD"
+date: "June 20, 2018"
+output: html_document
+---
+
+In this analysis, we use R to read in LandSat8 data, create a vegitation index and calculate zonal statistics of a raster. The data come from the [2006 National Land Cover Database](https://www.mrlc.gov/nlcd06_data.php).
+
+First we relcassify the NLCD data into two classes, based on the value of the raster. In this case, I want to classify the pixels as to whether they are developed or undeveloped. 
+
+We then use a census tract polygon layer to calculate the proportion of each tract's land area that is developed vs undeveloped. 
+
+
+## Raster read in 
+```{r }
+library(rgdal)
+library(raster)
+
+nlcd<-raster("/media/corey/0E45-D54F/classes/dem7093/dem7093_20/data/bexar_nlcddata.tif")
+plot(nlcd, main="Original Raster image")
+nlcd<-na.omit(nlcd)
+
+```
+
+## Clip raster to polygon
+```{r,eval=FALSE}
+library(sf)
+bexarco<-st_read("/media/corey/extra/gis_classwork/bexarpolygon.shp")
+bexarco<-st_transform(bexarco, crs=crs(nlcd))
+bexarco<- as_Spatial(bexarco)
+# doesn't work
+#est<-raster::extract(x=nlcd,y=ext)
+```
+
+## Raster reclassification:
+
+```{r}
+m<-c(1, 12, 0,13, 24, 1, 25, 95, 0)
+rclmat<-matrix(m, ncol=3, byrow = T)
+nlcdreclass<-reclassify(nlcd, rcl = rclmat)
+plot(nlcdreclass, main="Reclassified Raster image \n 1=developed, 0 = undeveloped",col= gray(100:0 / 100))
+
+```
+
+
+## Load the census tract polygons
+```{r, results='hide'}
+library(tigris)
+satract<-tracts(state="48", county="029", year=2010)
+
+library(sf)
+satract<-st_as_sf(satract)
+satract<-st_transform(satract, crs=  2278)
+
+satract<-as(satract, "Spatial")
+summary(satract)
+```
+
+## Calculate zonal statistics
+Now we find the mean of the binary reclassified data, to estimate the percent of each tract's area that is developed. 
+
+First we reproject the raster to the same coordinate system as the census data. I get the projection string from ^^^ above.
+
+```{r}
+nlcdreclass<-projectRaster(nlcdreclass, crs="+proj=lcc +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
+
+satract$pct_developed<-as.numeric(extract(nlcdreclass, satract, fun=mean)) #this takes a minute or two
+
+satract<-st_as_sf(satract)
+
+library(ggplot2)
+library(dplyr)
+satract<-satract%>%
+  filter(complete.cases(pct_developed))
+
+tractlines<-st_boundary(satract)
+
+library(classInt)
+m1<-satract%>%
+  mutate(devcut=cut(satract$pct_developed,breaks=data.frame(classIntervals(var=satract$pct_developed, n=5, style="jenks")[2])[,1], include.lowest = T))%>%
+  ggplot(aes( fill=devcut))+geom_sf()+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  geom_sf(data=tractlines,fill=NA, color="black")+
+  guides(fill=guide_legend(title="Percent Developed"))+ggtitle(label="Percent of Land Area Developed, 2006", subtitle ="NLCD 2006")+theme(axis.text.x = element_blank(), axis.text.y = element_blank())+theme( legend.text = element_text(size = 14), plot.title = element_text(size = 18), strip.text.x = element_text(size = 16))
+
+m1
+```
+
+I used this method in a [paper](https://www.sciencedirect.com/science/article/pii/S1877584511000529) I wrote in 2013, although in that paper I did the diversity of the land cover. That could be done like:
+
+```{r}
+nlcdproj<-projectRaster(nlcd, crs="+proj=lcc +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
+
+library(vegan)
+
+shannonVegan <- function(x, ...) {
+    diversity(table(x), index="shannon")
+}
+
+#shanVegOut <- focal(nlcdproj, fun=shannon, pad=T)  
+
+satract$var_land<-as.numeric(extract(nlcdproj, satract, fun=shannonVegan)) #this takes a minute or two
+
+library(dplyr)
+library(classInt)
+library(ggplot2)
+m2<-st_as_sf(satract)%>%
+  mutate(devcut=cut(satract$var_land,breaks=data.frame(classIntervals(var=satract$var_land, n=5,style = "fisher")[2])[,1], include.lowest = T))%>%
+  ggplot()+geom_sf(aes(fill=devcut))+
+  scale_color_brewer(palette="Blues")+
+  scale_fill_brewer(palette = "Blues")+
+  geom_sf(data=tractlines,fill=NA, color="black")
+  #guides(fill=guide_legend(title="Land Use Diversity"))+ggtitle(label="Standard Deviation - Land Use, 2006", subtitle ="NLCD 2006")+theme(axis.text.x = element_blank(), axis.text.y = element_blank())+theme( legend.text = element_text(size = 14), plot.title = element_text(size = 18), strip.text.x = element_text(size = 16))
+
+m2
+#ggsave(filename = "~/OneDrive - University of Texas at San Antonio/Environmental_Health_project/sa_lu_diversity.png", width = 8, height = 10, dpi = "print")
+library(mapview)
+mapview(satract,z= "var_land")
+```
+
+## Exporting images for posters
+I recommend using the `ggsave()` function to export images for use in other documents:
+
+```{r,eval=FALSE}
+ggsave(m1, path = "", filename = "sa_pct_devel.png", units = "in", width=8, height = 10)
+
+```
+
+And you can insert that image into a doc or presentation.
+
+
+## Landsat imagery
+Good simple description of landsat [here](https://gisgeography.com/landsat-8-bands-combinations/)
+
+```{r}
+library(raster)
+library(rgdal)
+library(rgeos)
+library(RColorBrewer)
+
+
+# turn off factors
+options(stringsAsFactors = FALSE)
+landsatstack<- list.files("/media/corey/Seagate Backup Plus Drive/LC08_L1TP_027040_20200311_20200325_01_T1/", 
+  pattern=glob2rx("*B*.TIF$"), 
+  full.names = T)
+
+landsatstack
+lsb2<-raster(landsatstack[2])
+
+plot(lsb2,col = gray(0:100 / 100))  
+  rm(lsb2)      ; gc()
+```
+
+## Make raster stack of bands 1 - 7
+```{r}
+lsstack<-stack(landsatstack[c(1,4:9)])
+
+lsbrick<-brick(lsstack)
+names(lsbrick)
+
+names(lsbrick) <- gsub(pattern = "LC08_L1TP_027040_20200311_20200325_01_T1_", replacement = "", names(lsbrick))
+names(lsbrick)
+```
+
+```{r}
+ndvi<-(lsbrick[[5]] - lsbrick[[4]]) / (lsbrick[[5]] + lsbrick[[4]])
+plot(ndvi,
+     main = "NDVI around San Antonio",
+     axes = FALSE, box = FALSE)       
+hist(ndvi)
+```
+
+```{r}
+library(mapview)
+mapview(nlcdreclass)
+writeRaster(x= ndvi, 
+    filename = "/media/corey/extra/gis_classwork/ndvi1.tif", format="GTiff", datatype="INT2S", overwrite=T)
+```
+
+### Landsat plots
+```{r}
+thermavg<-
+plotRGB(lsbrick,
+r = 5, g = 4, b = 3,
+stretch = "lin",
+axes = TRUE,
+main = "RGB composite image\n showing Agricultural land - Landsat Bands 6, 5, 2")
+box(col = "white")
+
+plotRGB(lsbrick,
+r = 5, g = 4, b = 3,
+stretch = "lin",
+axes = TRUE,
+main = "Color infrared composite image\n Landsat Bands 5, 4, 3")
+box(col = "white")
+
+```

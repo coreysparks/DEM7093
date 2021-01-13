@@ -1,0 +1,176 @@
+---
+title: "DEM 7093 - Using R for Point analysis Part 2 - Derived Variables"
+author: "Corey S. Sparks, Ph.D. - University of Texas at San Antonio"
+date: "June 13, 2018"
+always_allow_html: yes
+output:
+  pdf_document: default
+  html_document: default
+---
+
+In this example I will use QGIS geoprocessing scripts through the `RQGIS` library in R. I will use data from the 2005 Peru Demographic and Health Survey, and data from the Peruvian government on the locations of [secondary schools](http://sigmed.minedu.gob.pe/mapaeducativo/). 
+
+
+We use buffers from each DHS primary sampling unit location and point in polygon operations to measure whether a community had a secondary school within 5km. 
+
+Then, we use a hierarchical model to test whether a woman's educational attainment is related to physical access to secondary schooling.
+
+This is an example of a derived variable that cannot be obtained without the use of the GIS. 
+
+```{r}
+
+library(sf)
+library(RQGIS) #you need Qgis 2.18 installed, not 3!
+library(mapview)
+```
+##Read in the DHS sampling unit locations
+```{r}
+peru_dhs_points<-st_read("P:/LAPIVpaper/PEGE5BFL", "PEGE52FL")
+peru_dhs_points<-st_transform(peru_dhs_points, crs=24892)
+#project the data into a meter based system
+mapview(peru_dhs_points["DHSCLUST"])
+```
+
+
+##Set up QGIS environment
+This lets R find where your QGIS binaries are located. `set_env()` should work without you specifying the path, but in my case I had to tell R where Qgis lives.
+
+```{r}
+my_env<-set_env()
+
+```
+
+##Point in Polygon analysis
+So, right now we only have points (locations of sampling units), so we need a buffer around each point in order to do our assessment of whether a school is within 5km of each community. To do this we will do a fixed distance buffer of 5km around each sampling location. 
+
+##Buffer analysis
+First we find the name of the algorithm for point buffering
+```{r}
+find_algorithms(search_term = "buffer", qgis_env = my_env)
+
+```
+For this, we'll use the `qgis:fixeddistancebuffer` function, but we need to see what the arguments to the function are:
+
+```{r}
+get_usage(alg="qgis:fixeddistancebuffer", qgis_env = my_env, intern = F)
+```
+so we have 5 arguments, when we use the function, we need to specify *some* of these:
+
+```{r}
+
+params <- get_args_man(alg = "qgis:fixeddistancebuffer", qgis_env = my_env)
+params
+
+```
+
+Here I do a 5km buffer around each PSU location.
+
+```{r}
+wd<-"C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data"
+params$INPUT <-peru_dhs_points
+params$DISTANCE<-5000 #5km around each point
+params$OUTPUT<-file.path(wd, "peru_psu_buffer_5k.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_buff <- run_qgis(alg = "qgis:fixeddistancebuffer",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+
+mapview(peru_buff["DHSCLUST"], legend=T,map.types="OpenStreetMap")
+
+```
+
+5km buffers done! Now, we need to do our point in polygon operation. So I read in the Peruvian school data. These are a csv file, but have lat/long specified, so I can read in the text and make a simple feature layer from it. You can't have missing information in the coordinate data to do this.
+
+```{r}
+library(dplyr)
+schools<-read.csv("C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data/bars.csv", header=T)
+
+persch<-st_as_sf(schools, coords=c("Longitude", "Latitude"), crs=4269,agr="constant")
+persch<-st_transform(persch,crs=102009 )
+
+mapview(persch["Source"])
+```
+
+##points in polygons
+See what the right script is, and what arguments it needs:
+
+```{r}
+find_algorithms(search_term = "in polygon")
+get_usage(alg="qgis:countpointsinpolygon", qgis_env = my_env, intern = F)
+```
+
+```{r}
+
+params <- get_args_man(alg = "qgis:countpointsinpolygon", qgis_env = my_env)
+params
+
+```
+
+##make the parameter block
+```{r}
+wd<-"C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data"
+params$POLYGONS <-peru_buff
+params$POINTS<-persch
+params$OUTPUT<-file.path(wd, "peru_schoolsinbuffer.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_pip <- run_qgis(alg = "qgis:countpointsinpolygon",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+
+mapview(peru_pip["NUMPOINTS"],map.types="OpenStreetMap", legend=T)
+
+#recode the count of schools to be binary (0 or more than 0 schools)
+peru_pip$closeschool<-ifelse(peru_pip$NUMPOINTS>0,1,0)
+summary(peru_pip$closeschool)
+```
+
+So we see that 92.8% of communities have a secondary school within 5km, that's great, but what about the communities that don't?
+
+
+##Merge the new location data to our survey
+
+Here we load the 2005 DHS data, and do some recodes for educational attainment, age, and get the survey design variables. 
+
+```{r}
+library(haven)
+library(survey)
+library(dplyr)
+
+peru_data<-read_dta("P:/LAPIVpaper/DHS_IPVdata/PEIR51FL.DTA")
+
+peru_data<-peru_data%>%
+  mutate(eduprim=ifelse(v106==1,1,0),
+  edusecplus=ifelse(v106!=9&v106>=2,1,0),
+  pwt=v005/1000000, 
+  age=v012)%>%
+  select(v000, v021, v022,v024,age, pwt, eduprim, edusecplus )
+
+head(peru_data)
+
+```
+
+Now we merge the survey to the spatial data:
+```{r}
+
+peru_merge<-left_join(peru_data, peru_pip,by=c("v021"="DHSCLUST"))
+
+```
+
+In order to test for the effect of school access on women's educational attainment, we use a binomial generalized linear mixed model. We control for the survey design using a nested random effect specification (PSUs within strata).
+
+```{r}
+library(lme4)
+fit<-glmer(edusecplus~closeschool+scale(age)+(1|v022/v021),data=peru_merge, family = binomial, weights=pwt)
+
+summary(fit)
+
+```
+So, we see in this case that if women lived within 5km of a secondary school, they are `r 100*round( 1- exp(fixef(fit)[3]),4)` % more likely to have a secondary education or more, compared to woman living in a community without a school within 5km. 

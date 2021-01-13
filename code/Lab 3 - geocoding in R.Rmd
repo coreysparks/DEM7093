@@ -1,0 +1,40 @@
+---
+title: "Geocoding in R using Census Geocoder"
+author: "Corey S. Sparks, PhD"
+date: "2/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+In this example, we will geocode addresses using the Census Bureau's batch geocoding service. The work will be done by the `censusxy` [package](https://cran.r-project.org/web/packages/censusxy/vignettes/censusxy.html). 
+
+## Read in the address data
+We will use the from the CSV created in the [Lab 3 exercise](https://docs.google.com/document/d/e/2PACX-1vRe4u2C465ng7QW5xkPf06xZqxkup3FpS3cQkZQugMVyVN_uc7AsGJmd_9CEWWWhx1RRY33MERQeNwP/pub).
+
+```{r}
+addr<-read.csv("~/OneDrive - University of Texas at San Antonio/gis_classwork/wic_west_side.csv")
+
+library(censusxy)
+
+results<-cxy_geocode(addr, address = Physical.Address, city = Physical.City, state = Physical.State, zip = Physical.ZIP, output = "sf")
+```
+
+
+```{r}
+mapview::mapview(results, layer.name="WIC Services")
+
+```
+
+# Save the results
+We can write the results out to a shapefile now
+
+```{r}
+library(sf)
+
+st_write(results,normalizePath("~/westside_wic"), driver = "ESRI Shapefile",delete_layer = T)
+
+```

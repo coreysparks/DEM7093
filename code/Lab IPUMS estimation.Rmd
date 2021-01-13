@@ -1,0 +1,230 @@
+---
+title: "Using IPUMS for Estimation of Population Characteristics in Various Geographic Areas"
+author: "Corey Sparks, PhD"
+date: "4/2/2020"
+output:
+   html_document:
+    df_print: paged
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    includes:
+      in_header: logo.html
+---
+
+In this example we will use the [IPUMS USA](https://usa.ipums.org/usa/) data to produce survey-based estimates for various geographic levels present in the IPUMS. This example uses the 2014-2018 ACS 5-year microdata. 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ipumsr)
+ddi <- read_ipums_ddi("/media/corey/extra/gis_classwork/usa_00083.xml")
+data <- read_ipums_micro(ddi)
+data<-haven::zap_labels(data)
+
+```
+
+```{r, message=FALSE}
+library(survey)
+library(dplyr)
+library(car)
+library(ggplot2)
+library(tigris)
+library(classInt)
+library(mapview)
+```
+### Download geographic data for Public Use Microdata Areas
+```{r, results='hide'}
+options(tigris_class = "sf")
+pumas<-pumas(state = "TX", year = 2018, cb = T)
+plot(pumas["GEOID10"], main = "Public Use Microdata Areas in Texas")
+```
+
+```{r}
+names(data)<-tolower(names(data))
+```
+
+## Prepare variables
+Here I recode several demographic variables
+```{r}
+#weight variables
+data$pwt <- data$perwt/100
+data$hwt <- data$hhwt/100
+
+data$hisp <- Recode(data$hispan, recodes = "9=NA; 1:4='Hispanic'; 0='NonHispanic'")
+data$race_rec <- Recode(data$race, recodes = "1='White'; 2='Black'; 3='Other'; 4:6='Asian'; 7:9='Other'")
+data$race_eth <- interaction(data$hisp, data$race_rec, sep = "_")
+data$race_eth  <- as.factor(ifelse(substr(as.character(data$race_eth),1,8) == "Hispanic", "Hispanic", as.character(data$race_eth)))
+data$race_eth <- relevel(data$race_eth, ref = "NonHispanic_White")
+
+data$male <- ifelse(data$sex == 1,1,0)
+
+data$educ_level<- Recode(data$educd, recodes = "2:61='0LT_HS';62:64='1_HSD/GED';65:80='2_somecoll';90:100='2_somecoll'; 81:83='3_AssocDegree';101='4_bachelordegree'; 110:116='4_BAplus_GradDegree'; else=NA")
+
+data$employed <- Recode(data$wrklstwk, recodes = "1=0;2=1; else=NA")
+
+data$cit<-Recode(data$citizen, recodes = "1='US born'; 2='naturalized'; 3:4='notcitizen';else=NA ")
+
+data$ind_group<-Recode(data$ind, recodes = "170:490='ag_extract'; 770='construction'; 1070:3990='manufac'; 4070:5790='whole_retail'; 6070:6390='trans'; 6470:6780='information'; 6870:7190= 'fire'; 7270=7790='prof/sci/manage'; 7860:8470='edu/social'; 8560:8690='arts'; 8770:9290='other'; 9370:9590='public_adm'; 9670:9870='military'; else=NA ")
+
+data$proftech <- Recode(data$ind, recodes = "7270:7490=1; 0=NA; else=0")
+
+data$agecat<-cut(data$age, breaks = c(0, 18, 20, 30, 40, 50, 65, 120), include.lowest = T)
+
+#data$edu_scal_inc <- ave(data$incwage, data$male, FUN = scale)
+```
+
+## Generate survey design object
+Here we identify the person weights and the survey design variables.
+
+```{r}
+des<-svydesign(ids=~cluster, strata=~ strata, weights = ~pwt, data=data)
+```
+
+## perform survey estimation for PUMAs
+The `svyby()` function allows us calculate estimates for different **sub-domains** within the data, this could be a demographic characteristic, but we'll use our geographic level. 
+
+```{r}
+puma_est_edu<-svyby(formula = ~educ_level, by = ~puma,design=subset(des,age>25), FUN=svymean, na.rm=T )
+puma_est_employ<-svyby(formula = ~employed, by = ~puma,design=subset(des, age%in%18:65), FUN=svymean, na.rm=T )
+puma_est_industry<-svyby(formula = ~proftech, by = ~puma,design=subset(des, employed==1), FUN=svymean, na.rm=T )
+
+head(puma_est_edu)
+head(puma_est_employ)
+head(puma_est_industry)
+```
+
+## join to geography
+```{r}
+pumas$puma<-as.numeric(pumas$PUMACE10)
+geo1<-geo_join(pumas, puma_est_employ, "puma", "puma")
+head(geo1)
+
+geo2<-geo_join(pumas, puma_est_industry, "puma", "puma")
+head(geo2)
+
+```
+
+## Map estimates
+```{r}
+geo1%>%
+  mutate(emp_cut=cut(100*employed,breaks = data.frame(classIntervals(var=100*puma_est_employ$employed, n=5, style="jenks")[2])[,1],include.lowest = T))%>%
+  ggplot()+geom_sf(aes(fill=emp_cut, color=emp_cut))+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  ggtitle(label="Employment rate in Texas PUMAs", subtitle = "ACS 2014 - 2018")
+
+geo1%>%
+  mutate(emp_cut=cut(100*employed,breaks = data.frame(classIntervals(var=100*puma_est_employ$employed, n=5, style="jenks")[2])[,1],include.lowest = T))%>%
+  filter(grepl(geo1$NAME10, pattern = "San Antonio")==T)%>%
+  ggplot()+geom_sf(aes(fill=emp_cut), color="black")+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  ggtitle(label="Employment rate in San Antonio PUMAs", subtitle = "ACS 2014 - 2018")
+
+mapview(geo1, zcol="employed")
+```
+
+```{r}
+geo2%>%
+  mutate(p_cut=cut(100*proftech,breaks = data.frame(classIntervals(var=100*puma_est_industry$proftech, n=5, style="jenks")[2])[,1],include.lowest = T))%>%
+  ggplot()+geom_sf(aes(fill=p_cut))+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  ggtitle(label="Percent in Professional/Technical Jobs  \n in Texas PUMAs", subtitle = "ACS 2014 - 2018")
+
+geo2%>%
+mutate(p_cut=cut(100*proftech,breaks = data.frame(classIntervals(var=100*puma_est_industry$proftech, n=5, style="jenks")[2])[,1],include.lowest = T))%>%
+  filter(grepl(geo1$NAME10, pattern = "San Antonio")==T)%>%
+  ggplot()+geom_sf(aes(fill=p_cut), color="black")+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  ggtitle(label="Percent in Professional/Technical Jobs  \n in San Antonio PUMAs", subtitle = "ACS 2014 - 2018")
+
+
+```
+
+
+## Estimation for metro areas
+Here we use core based statistical areas instead of PUMAs
+
+```{r, results='hide'}
+mets<-core_based_statistical_areas(cb = T, year = 2018)
+mets<-mets[grep(mets$NAME,pattern =  "TX"),]
+plot(mets["NAME"])
+
+sts<-states(cb=T, year=2018)
+sts<-sts%>%
+  filter(GEOID==48)
+```
+## estimates by metro area
+```{r}
+met_est_edu<-svyby(formula = ~educ_level, by = ~met2013,design=subset(des,age>25), FUN=svymean, na.rm=T )
+met_est_employ<-svyby(formula = ~employed, by = ~met2013,design=subset(des, age%in%18:65), FUN=svymean, na.rm=T )
+met_est_industry<-svyby(formula = ~proftech, by = ~met2013,design=subset(des, employed==1), FUN=svymean, na.rm=T )
+
+head(met_est_edu)
+head(met_est_employ)
+head(met_est_industry)
+
+```
+
+
+```{r}
+mets$met2013<-as.numeric(mets$GEOID)
+geo3<-geo_join(mets, met_est_employ,by_sp= "met2013",by_df= "met2013")
+
+geo3%>%
+  mutate(emp_cut=cut(100*employed,breaks = data.frame(classIntervals(var=100*met_est_employ$employed, n=5, style="jenks")[2])[,1],include.lowest = T))%>%
+  ggplot()+
+  geom_sf(aes(fill=emp_cut))+
+  scale_fill_brewer(palette = "Blues", na.value = "grey50") + 
+  scale_color_brewer(palette = "Blues",na.value = "grey50")+
+  ggtitle(label="Employment rate in Texas \nMetro Areas", subtitle = "ACS 2014 - 2018")
+  
+
+mapview(geo3, zcol="employed")
+```
+
+
+## Estimation for Counties
+## 
+```{r, results='hide'}
+cos<-counties(cb= T,state = "TX", year = 2018)
+plot(cos["NAME"])
+
+sts<-states(cb=T, year=2018)
+sts<-sts%>%
+  filter(GEOID==48)
+```
+## estimates by county area
+```{r}
+cos_est_edu<-svyby(formula = ~educ_level, by = ~countyfip,design=subset(des,age>25), FUN=svymean, na.rm=T )
+cos_est_employ<-svyby(formula = ~employed, by = ~countyfip,design=subset(des, age%in%18:65), FUN=svymean, na.rm=T )
+cos_est_industry<-svyby(formula = ~proftech, by = ~countyfip,design=subset(des, employed==1), FUN=svymean, na.rm=T )
+
+head(cos_est_edu)
+head(cos_est_employ)
+head(cos_est_industry)
+
+```
+
+
+```{r}
+cos$cofip<-as.numeric(cos$COUNTYFP)
+geo4<-geo_join(cos, cos_est_employ,by_sp= "cofip",by_df= "countyfip")
+
+geo4%>%
+  mutate(emp_cut=cut(100*employed,breaks = data.frame(classIntervals(var=100*cos_est_employ$employed, n=5, style="jenks")[2])[,1],include.lowest = T))%>%
+  ggplot()+
+  geom_sf(aes(fill=emp_cut))+
+  scale_fill_brewer(palette = "Blues", na.value = "grey50") + 
+  scale_color_brewer(palette = "Blues",na.value = "grey50")+
+  ggtitle(label="Employment rate in Texas \nCounties", subtitle = "ACS 2014 - 2018")
+  
+
+
+```

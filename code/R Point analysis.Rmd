@@ -1,0 +1,178 @@
+---
+title: "DEM 7093 - Using R for Point analysis Part 1"
+author: "Corey S. Sparks, Ph.D. - University of Texas at San Antonio"
+date: "June 12, 2018"
+output: html_document
+---
+
+In this example I will use QGIS geoprocessing scripts through the `RQGIS` library in R. I will use data from the 2005 Peru Demographic and Health Survey, where I construct Voronoi polygons from the primary sampling unit locations and generate estimates of educational attainment for women.
+
+```{r}
+
+library(sf)
+library(RQGIS) #you need Qgis 2.18 installed, not 3!
+library(mapview)
+```
+
+```{r}
+peru_dhs_points<-st_read("P:/LAPIVpaper/PEGE5BFL", "PEGE52FL")
+peru_dhs_points<-st_transform(peru_dhs_points, crs=24892)
+#project the data into a meter based system
+mapview(peru_dhs_points["DHSCLUST"])
+```
+
+
+##Set up QGIS environment
+This lets R find where your QGIS binaries are located. `set_env()` should work without you specifying the path
+```{r}
+my_env<-set_env()
+
+```
+
+#Buffer analysis
+First we find the name of the algorithm for point buffering
+```{r}
+find_algorithms(search_term = "buffer", qgis_env = my_env)
+
+```
+For this, we'll use the `qgis:fixeddistancebuffer` function, but we need to see what the arguments to the function are:
+
+```{r}
+
+get_usage(alg="qgis:fixeddistancebuffer", qgis_env = my_env, intern = F)
+```
+so we have 5 arguments, when we use the function, we need to specify all of these:
+
+```{r}
+
+params <- get_args_man(alg = "qgis:fixeddistancebuffer", qgis_env = my_env)
+params
+
+```
+
+Here I do a 5km buffer around each PSU location.
+
+```{r}
+wd<-"C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data"
+params$INPUT <-peru_dhs_points
+params$DISTANCE<-5000 #5km around each point
+params$OUTPUT<-file.path(wd, "peru_psu_buffer_5k.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_buff <- run_qgis(alg = "qgis:fixeddistancebuffer",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+
+mapview(peru_buff["DHSCLUST"], legend=T,map.types="OpenStreetMap")
+
+```
+
+5km buffers done! Now, If I only had some other point data, I could do some point in polygon operations!
+
+##Vonoroi polygons
+```{r}
+find_algorithms(search_term = "Voronoi")
+get_usage(alg="qgis:voronoipolygons", qgis_env = my_env, intern = F)
+```
+so we have 3 arguments, when we use the function,:
+
+```{r}
+
+params <- get_args_man(alg = "qgis:voronoipolygons", qgis_env = my_env)
+params
+
+```
+
+
+```{r}
+wd<-"C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data"
+params$INPUT <-peru_dhs_points
+params$OUTPUT<-file.path(wd, "peru_psu_von_poly.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_von <- run_qgis(alg = "qgis:voronoipolygons",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+
+mapview(peru_von["DHSCLUST"],map.types="OpenStreetMap")
+
+```
+
+
+The polygons obviously have issues, so we can clip them to the Peruvian border:
+
+```{r}
+find_algorithms(search_term = "clip")
+get_usage(alg="qgis:clip", qgis_env = my_env, intern = F)
+```
+so we have 3 arguments, when we use the function,:
+
+```{r}
+
+params <- get_args_man(alg = "qgis:clip", qgis_env = my_env)
+params
+
+```
+
+
+```{r}
+peru_border<-st_read("P:/LAPIVpaper/PER_adm", "PER_adm0")
+peru_border<-st_transform(peru_border,crs=24892)
+
+wd<-"C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data"
+params$INPUT <-peru_von
+params$OVERLAY<-peru_border
+params$OUTPUT<-file.path(wd, "peru_psu_von_poly_clip.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_von_clip <- run_qgis(alg = "qgis:clip",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+
+mapview(peru_von_clip["DHSCLUST"],map.types="OpenStreetMap")
+
+```
+
+##Map some estimates:
+
+If we have the 2005 DHS data, we could generate estimates of some quality, say proportion of women with a secondary education or more:
+
+```{r}
+library(haven)
+library(survey)
+library(dplyr)
+
+peru_data<-read_dta("P:/LAPIVpaper/DHS_IPVdata/PEIR51FL.DTA")
+
+peru_data<-peru_data%>%
+  mutate(eduprim=ifelse(v106==1,1,0),
+  edusecplus=ifelse(v106!=9&v106>=2,1,0),
+  pwt=v005/1000000)%>%
+  select(v000, v021, v022,v024,pwt, eduprim, edusecplus )
+
+head(peru_data)
+
+library(lme4)
+fit<-glmer(edusecplus~1+(1|v022/v021),data=peru_data, family = binomial, weights=pwt)
+
+peru_data$edu_ests<-fitted(fit)
+place_ests<-aggregate(edu_ests~v021, data=peru_data, FUN=mean)
+head(place_ests)
+```
+
+Merge the estimates to the polygons
+```{r}
+peru_ests<-left_join(peru_von_clip, place_ests, by=c("DHSCLUST"= "v021"))
+
+
+mapview(peru_ests["edu_ests"], legend=T,map.types="OpenStreetMap")
+```

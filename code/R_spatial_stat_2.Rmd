@@ -1,0 +1,432 @@
+---
+title: "DEM 7093 Spatial Statistics Part 2 - Linear models with spatial structure"
+author: "Corey S. Sparks, Ph.D. - University of Texas at San Antonio"
+date: "June 28, 2018"
+output: 
+  html_document:
+    includes:
+      in_header: logo.html
+---
+
+#Introduction to Spatial Regression Models
+
+#How to break a linear model
+
+- Up until now, we have been concerned with describing the structure of spatial data through correlational, and the methods of [exploratory spatial data analysis](http://rpubs.com/corey_sparks/105700).
+
+- Through ESDA, we examined data for patterns and using the Moran I and Local Moran I statistics, we examined clustering of variables.
+
+- Now we consider regression models for continuous outcomes. We begin with a review of the Ordinary Least Squares model for a continuous outcome.
+
+#OLS Model
+
+- The basic OLS model is an attempt to estimate the effect of an independent variable(s) on the value of a dependent variable.  This is written as:
+- $y_i = \beta_0 + \beta_1 * x_i + e_i$
+
+- where y is the dependent variable that we want to model, 
+- x is the independent variable we think has an association with y,
+- $\beta_0$ is the model intercept, or grand mean of y, when x = 0, and
+- $\beta_1$ is the slope parameter that defines the strength of the linear relationship between x and y. 
+- e is the error in the model for y that is unaccounted for by the values of x and the grand mean $\beta_0$. 
+
+----
+
+- The average, or expected value of y is : $E[y|x] = \beta_0 + \beta_1 * x_i$, which is the linear mean function for y, conditional on x, and this gives us the customary linear regression plot:
+
+```{r, echo=F }
+set.seed(1234)
+x<- rnorm(100, 10, 5)
+beta0<-1
+beta1<-1.5
+y<-beta0+beta1*x+rnorm(100, 0, 5)
+
+plot(x, y)
+abline(coef = coef(lm(y~x)), lwd=1.5)
+summary(lm(y~x))$coef
+```
+
+Where, the line shows $E[y|x] = \beta_0 + \beta_1 * x_i$
+
+----
+
+- We assume that the errors, $e_i \sim N(0, \sigma^2)$ are independent, Normally distributed and homoskdastic, with variances $\sigma^2$. 
+
+- This is the simple model with one predictor.  We can easily add more predictors to the equation and rewrite it:
+$y = \beta_0 + \sum^k \beta_k * x_{ik} + e_i$
+
+----
+
+- So, now the mean of y is modeled with multiple x variables. We can write this relationship more compactly using matrix notation:
+
+- $Y =    X ' \beta +  e$
+
+- Where Y is now a $n*1$ vector of observations of our dependent variable, X is a $n*k$ matrix of independent variables, with the first column being all 1's and e is the $n*1$ vector of errors for each observation.
+
+----
+
+- In matrices this looks like:
+$$y = \begin{bmatrix}
+y_1 \\ y_2 \\ \vdots \\ y_n 
+\end{bmatrix}$$
+
+$$\beta = \begin{bmatrix}
+\beta_0   \\ \beta_1 \\ \vdots \\ \beta_k 
+\end{bmatrix}$$
+
+----
+
+$$x=\begin{bmatrix}
+1 & x_{1,1} & x_{1,2}  & \dots  & x_{1, k}\\ 
+1 & x_{2,1} & x_{1,2}  & \dots  & x_{1, k} \\ 
+1 &\vdots & \vdots & \vdots & \vdots \\
+1 & x_{n,1} & x_{n,2}  & \dots  & x_{n, k} 
+\end{bmatrix}$$
+
+$$ e  = \begin{bmatrix}
+e_1 \\ e_2 \\ \vdots \\ e_n 
+\end{bmatrix}$$
+
+----
+
+The residuals are uncorrelated, with covariance matrix $\Sigma$ = 
+
+$$ \Sigma = \sigma^2 I = \sigma^2 * \begin{bmatrix}
+1 & 0 & 0  & \dots  & 0\\ 
+0 & 1 & 0  & \dots  & 0 \\ 
+0 & \vdots & \vdots & \dots & \vdots \\
+0 & 0 & 0  & \dots  & 1 
+\end{bmatrix} = \begin{bmatrix}
+\sigma^2 & 0 & 0  & \dots  & 0\\ 
+0 & \sigma^2 & 0  & \dots  & 0 \\ 
+0 & \vdots & \vdots & \dots & \vdots \\
+0 & 0 & 0  & \dots  & \sigma^2
+\end{bmatrix}$$
+
+----
+
+#Model-data agreement
+
+- Do we (meaning our data) meet the statistical assumptions of our analytical models?  
+
+- *Always ask this of any analysis you do, if your model is wrong, your inference will also be wrong.*
+
+- Since spatial data often display correlations amongst closely located observations (autocorrelation), we should probably test for autocorrelation in the model residuals, as that would violate the assumptions of the OLS model.  
+
+- One method for doing this is to calculate the value of Moran's I for the OLS residuals.
+
+
+- Here's a simple OLS model of the form: 
+
+- Poverty rate =  % Black +% Hispanic + %LEP
+
+- In R:  ` lm( poverty ~pblack+phisp+plep)`
+
+- I extract the residuals and map them :
+
+
+```{r, echo=F,message=FALSE,results='hide'}
+library(tidycensus);  library(tidyverse)
+library(spdep); library(sf)
+sa_acs<-get_acs(geography = "tract", state="TX", county = c("029", "013","255","091","187","493","163","311","325","019","265","171","259"), year = 2015,
+                variables=c("DP05_0001E", "DP03_0009P", "DP03_0062E", "DP03_0119PE",
+                            "DP05_0001E","DP02_0009PE","DP02_0008PE", "DP02_0040E","DP02_0038E",
+                            "DP02_0066PE","DP02_0067PE","DP02_0080PE","DP02_0092PE",
+                            "DP03_0005PE","DP03_0028PE","DP03_0062E","DP03_0099PE","DP03_0101PE",
+                            "DP03_0119PE","DP04_0046PE","DP04_0078PE","DP05_0072PE","DP05_0073PE",
+                            "DP05_0066PE", "DP05_0072PE", "DP02_0113PE") ,
+                geometry = T, output = "wide")
+
+sa_acs$county<-substr(sa_acs$GEOID, 1, 5)
+
+sa_acs2<-sa_acs%>%
+  mutate(totpop= DP05_0001E, fertrate = DP02_0040E,pwhite=DP05_0072PE, 
+         pblack=DP05_0073PE , phisp=DP05_0066PE, pfemhh=DP02_0008PE,
+         phsormore=DP02_0066PE,punemp=DP03_0009PE, medhhinc=DP03_0062E,
+         ppov=DP03_0119PE, pforn=DP02_0092PE,plep=DP02_0113PE) %>%
+  na.omit()
+
+metro<- tigris::core_based_statistical_areas(cb=T, year = 2015)
+metro<-metro%>%
+  st_as_sf()%>%
+  st_boundary()%>%
+  filter(grepl(NAME,pattern="San Antonio"))
+```
+
+###Quantile maps of the four variables in the analysis
+
+```{r}
+sa_acs2%>%
+  mutate(povquant=cut(ppov, breaks = quantile(sa_acs2$ppov, p=seq(0,1,length.out = 8)), include.lowest = T))%>%
+  ggplot(aes(color=povquant, fill=povquant))+geom_sf()+
+  scale_fill_brewer(palette = "RdBu")+
+  scale_color_brewer(palette = "RdBu")+
+  ggtitle(label = "Poverty Rate in Census Tracts -AACOG 2015")+geom_sf(data=metro, fill=NA, color="black")
+
+sa_acs2%>%
+  mutate(blquant=cut(pblack, breaks = quantile(sa_acs2$pblack, p=seq(0,1,length.out = 8)), include.lowest = T))%>%
+  ggplot(aes(color=blquant, fill=blquant))+geom_sf()+
+  scale_fill_brewer(palette = "RdBu")+
+  scale_color_brewer(palette = "RdBu")+
+  ggtitle(label = "% Black in Census Tracts -AACOG 2015")+geom_sf(data=metro, fill=NA, color="black")
+
+sa_acs2%>%
+  mutate(hquant=cut(phisp, breaks = quantile(sa_acs2$phisp, p=seq(0,1,length.out = 8)), include.lowest = T))%>%
+  ggplot(aes(color=hquant, fill=hquant))+geom_sf()+
+  scale_fill_brewer(palette = "RdBu")+
+  scale_color_brewer(palette = "RdBu")+
+  ggtitle(label = "% Hispanic in Census Tracts -AACOG 2015")+geom_sf(data=metro, fill=NA, color="black")
+
+sa_acs2%>%
+  mutate(lquant=cut(plep, breaks = quantile(sa_acs2$plep, p=seq(0,1,length.out = 8)), include.lowest = T))%>%
+  ggplot(aes(color=lquant, fill=lquant))+geom_sf()+
+  scale_fill_brewer(palette = "RdBu")+
+  scale_color_brewer(palette = "RdBu")+
+  ggtitle(label = "% Low english proficiency in Census Tracts -AACOG 2015")+geom_sf(data=metro, fill=NA, color="black")
+
+
+```
+
+#Form neighbors and weight matrix
+
+```{r}
+sa_acs2<-as(sa_acs2, "Spatial")
+nbs<-poly2nb(sa_acs2, queen = T)
+wts<-nb2listw(nbs, style = "W")
+```
+
+
+#Estimate the OLS model
+
+```{r,warning=FALSE, message=FALSE}
+fit <- lm( ppov ~plep+ phisp+pblack, data=sa_acs2)
+summary(fit)
+
+nbs<-poly2nb(sa_acs2, queen = T)
+wts<-nb2listw(nbs, style = "W")
+sa_acs2$olsresid<-rstudent(fit)
+```
+
+
+#Map the model residuals
+
+```{r}
+library(ggplot2)
+library(sf)
+library(dplyr)
+sa_acs2<-st_as_sf(sa_acs2)
+sa_acs2%>%
+  mutate(rquant=cut(olsresid, breaks = quantile(sa_acs2$olsresid, p=seq(0,1,length.out = 8)), include.lowest = T))%>%
+  ggplot(aes(color=rquant, fill=rquant))+geom_sf()+
+  scale_fill_brewer(palette = "RdBu")+
+  scale_color_brewer(palette = "RdBu")+geom_sf(data=metro, fill=NA, color="black")
+
+#Moran's I on residuals from model
+lm.morantest(fit, listw = wts)
+
+```
+
+Which, in this case, there appears to be significant clustering in the residuals, since the observed value of Moran's I is .14, with a z-test of 5.12, p < .0001 
+
+#Extending the OLS model to accommodate spatial structure
+
+- If we now assume we measure our Y and X's at specific spatial locations (s), so we have Y(s) and X(s).  
+
+- In most analysis, the spatial location (i.e. the county or census tract) only serves to link X and Y so we can collect our data on them, and in the subsequent analysis this spatial information is ignored that explicitly considers the spatial relationships between the variables or the locations.
+
+- In fact, even though we measure Y(s) and X(s) what we end up analyzing X and Y, and apply the ordinary regression methods on these data to understand the effects of X on Y.  
+
+- Moreover, we could move them around in space (as long as we keep the observations together $y_i$ with $x_i$) and still get the same results.
+
+----
+
+- Such analyses have been called *a-spatial*.  This is the kind of regression model you are used to fitting, where we ignore any information on the locations of the observations themselves.
+
+- However, we can extend the simple regression case to include the information on (s) and incorporate it into our models explicitly, so they are no longer *a-spatial*.
+
+- There are several methods by which to incorporate the (s) locations into our models, there are several alternatives to use on this problem:
+
+- The structured linear mixed (multi-level) model, or GLMM (generalized linear mixed model)
+- Spatial filtering of observations
+- Spatially autoregressive models
+- Geographically weighted regression
+
+
+#How to model spatial data correctly
+
+-We will first deal with the case of the spatially autoregressive model, or **SAR model**, as its structure is just a modification of the OLS model from above.
+
+##Spatially autoregressive models
+We saw in the normal OLS model that some of the basic assumptions of the model are that the:
+1)	model residuals are distributed as iid standard normal random variates
+2)	and that they have common (and constant, meaning homoskedastic) unit variance. 
+
+
+- Spatial data, however present a series of problems to the standard OLS regression model. These problems are typically seen as various representations of spatial structure or *dependence* within the data. The spatial structure of the data can introduce spatial dependence into both the outcome, the predictors and the model residuals.
+
+
+- This can be observed as neighboring observations, both with high (or low) values (positive autocorrelation) for either the dependent variable, the model predictors or the model residuals.  We can also observe situations where areas with high values can be surrounded by areas with low values (negative autocorrelation).
+
+
+- Since the standard OLS model assumes the residuals (and the outcomes themselves) are uncorrelated:
+ - the autocorrelation inherent to most spatial data introduces factors that violate the iid distributional assumptions for the residuals, and could violate the assumption of common variance for the OLS residuals.  
+ - To account for the expected spatial association in the data, we would like a model that accounts for the spatial structure of the data.
+ - One such way of doing this is by allowing there to be correlation between residuals in our model, or to be correlation in the dependent variable itself.
+
+----
+
+ - I have introduced with the concept of autoregression amongst neighboring observations.  
+ - This concept is that a particular observation is a linear combination of its neighboring values.  
+ - This autoregression introduces dependence into the data.  
+ - Instead of specifying the autoregression structure directly, we introduce spatial autocorrelation through a global autocorrelation coefficient and a spatial proximity measure.
+
+----
+
+- There are 2 basic forms of the **spatial autoregressive model**: the spatial lag and the spatial error models.
+
+- Both of these models build on the basic OLS regression model:
+- $Y = X '  \beta +  e$
+
+#The spatial lag model
+
+- The spatial lag model introduces autocorrelation into the regression model by lagging the dependent variables themselves, much like in a time-series approach .  
+- The model is specified as:
+- $Y= \rho  W Y + X '\beta +e$
+
+- where $\rho$ is the *autoregressive* coefficient, which tells us how strong the resemblance is, on average, between $Y_i$ and it's neighbors. The matrix  **W** is the spatial weight matrix, describing the spatial network structure of the observations, like we described in the ESDA lecture.
+
+
+#The spatial error model
+
+- The spatial error model says that the autocorrelation is not in the outcome itself, but instead, any autocorrelation is attributable to there being missing *spatial covariates* in the data. 
+
+- If these spatially patterned covariates *could* be measures, the the autocorrelation would be 0. This model is written:
+
+- $Y=   X' \beta +e$
+
+- $e=\lambda W e + v$
+
+----
+
+- This model, in effect, controls for the nuisance of correlated errors in the data that are attributable to an inherently spatial process, or to spatial autocorrelation in the measurement errors of the measured and possibly unmeasured variables in the model.  
+
+Another form of a spatial lag model is the **Spatial Durbin Model** (SDM). This model is an extension of the ordinary lag or error model that includes spatially lagged independent variables. 
+
+If you remember, one issue that commonly occures with the lag model, is that we often have residual autocorrelation in the model. This autocorrelation could be attributable to a missing spatial covariate. 
+
+We *can* get a kind of spatial covariate by lagging the predictor variables in the model using **W**. 
+
+----
+
+This model can be written:
+
+$Y= \rho  W Y + X '\beta + W X \theta + e$
+
+Where, the $\theta$ parameter vector are now the regression coefficients for the lagged predictor variables. We can also include the lagged predictors in an error model, which gives us the **Durbin Error Model** (DEM):
+
+$Y= X '\beta + W X \theta + e$
+
+$e=\lambda W e + v$
+
+Generally, the spatial Durbin model is preferred to the ordinary error model, because we can include the *unspecified spatial covariates* from the error model into the Durbin model via the lagged predictor variables.
+
+----
+
+
+#Examination of Model Specification
+
+- To some degree, both of the SAR specifications allow us to model spatial dependence in the data.  The primary difference between them is where we model said dependence. 
+
+- The lag model says that the dependence affects the dependent variable only, we can liken this to a diffusion scenario, where your neighbors have a diffusive effect on you. 
+
+- The error model says that dependence affects the residuals only.  We can liken this to the missing spatially dependent covariate situation, where, if only we could measure another really important spatially associated predictor, we could account for the spatial dependence.  But alas, we cannot, and we instead model dependence in our errors.
+
+----
+
+- These are inherently two completely different ways to think about specifying a model, and we should really make our decision based upon how we think our process of interest operates.
+
+- That being said, this way of thinking isn't necessarily popular among practitioners.  Most practitioners want the *best fitting model*, 'nuff said.   So methods have been developed that test for alternate model specifications, to see which kind of model best summarizes the observed variation in the dependent variable and the spatial dependence. 
+
+- These are a set of so-called Lagrange Multiplier (econometrician's jargon for a [score test](https://en.wikipedia.org/wiki/Score_test)) test.  These tests compare the model fits from the OLS, spatial error, and spatial lag models using the method of the score test.
+
+----
+
+- For those who don't remember, the score test is a test based on the relative change in the first derivative of the likelihood function around the maximum likelihood.  
+
+- The particular thing here that is affecting the value of this derivative is the autoregressive parameter, $\rho$ or $\lambda$.  
+
+- In the OLS model $\rho$ or $\lambda$ = 0 (so both the lag and error models simplify to OLS), but as this parameter changes, so does the likelihood for the model, hence why the derivative of the likelihood function is used.  
+
+- This is all related to how the estimation routines estimate the value of $\rho$ or $\lambda$. 
+
+
+#Using the Lagrange Multiplier Test (LMT)
+
+- In general, you fit the OLS model to your dependent variable, then submit the OLS model fit to the LMT testing procedure.
+
+- Then you look to see which model (spatial error, or spatial lag) has the highest value for the test.  
+
+- Enter the uncertainty...
+
+- So how much bigger, you might say?
+
+----
+
+- Well, drastically bigger, if the LMT for the error model is 2500 and the LMT for the lag model is 2480, this is NOT A BIG DIFFERENCE, only about 1%. 
+
+- If you see a LMT for the error model of 2500 and a LMT for the lag model of 250, THIS IS A BIG DIFFERENCE.
+
+- So what if you don't see a BIG DIFFERENCE, HOW DO YOU DECIDE WHICH MODEL TO USE???
+
+- Well, you could think more, but who has time for that.
+
+- The econometricians have thought up a better LMT test, the so-called robust LMT, robust to what I'm not sure, but it is said that it can settle such problems of a not so big difference between the lag and error model specifications.
+
+- So what do you do?  In general, think about your problem before you run your analysis, should this fail you, proceed with using the LMT, if this is inconclusive, look at the robust LMT, and choose the model which has the larger value for this test.
+
+
+```{r}
+
+lm.LMtests(model = fit, listw=wts, test = "all")
+
+```
+
+
+
+Fit the spatial regression models
+```{r}
+#Spatial Error model
+fit.err<-errorsarlm(ppov ~plep+ phisp+pblack,
+                  data=sa_acs2, listw=wts)
+summary(fit.err, Nagelkerke=T)
+
+
+#Spatial Lag Model
+fit.lag<-lagsarlm(ppov ~plep+ phisp+pblack,
+                  data=sa_acs2, listw=wts, type="lag")
+summary(fit.lag, Nagelkerke=T)
+
+#Spatial Durbin Lag Model
+fit.lag2<-lagsarlm(ppov ~plep+ phisp+pblack,
+                   data=sa_acs2, listw=wts, type="mixed")
+summary(fit.lag2, Nagelkerke=T)
+
+#Spatial Durbin Error Model
+fit.errdurb<-errorsarlm(ppov ~plep+ phisp+pblack,
+                   data=sa_acs2, listw=wts, etype="emixed")
+summary(fit.errdurb, Nagelkerke=T)
+
+
+
+#which says we still have significant autocorrelation in the residuals, even after
+#accounting for autocorrelation in the outcome
+bptest.sarlm(fit.lag)
+bptest.sarlm(fit.lag2)
+
+AIC(fit.err)
+AIC(fit.lag)
+AIC(fit.lag2)
+AIC(fit.errdurb)
+```
+
+
+

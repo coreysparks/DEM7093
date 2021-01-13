@@ -1,0 +1,85 @@
+---
+title: "Bexar County Income Ratio"
+author: "Corey Sparks, PhD"
+date: "7/23/2020"
+output:
+   html_document: 
+     fig_height: 7
+     includes:
+       in_header: logo.html
+     keep_md: yes
+     toc: yes
+---
+
+This example shows how to calculate an index of income segregation for Bexar County, TX using data from the 2018 American Community Survey
+
+Some measures of economic segregation are calculated by the Census bureau directly, in the American Community Survey, the Census provides the Gini Index of income inequality for many geographies. This measure is widely used in economics and give a general picture of the equality of the income distribution within a place, although it says nothing about how the different income groups live with respect to one another. 
+
+A second measure of income segregation is very simple to calculate, although it is frequently criticized as being arbitrary. It is the ratio of the median household income in each subarea to the median household income in the larger area. It is also easy to interpret. If a subarea has a lower income than the larger area, the index will be less than one, and if a subarea has a higher income, the index is greater than one. 
+
+You can find maps of this index for many US metro areas through the Brown University [Diversity and Disparities project](https://s4.ad.brown.edu/projects/diversity/IncSeg1/IncMapsDload.htm), which provides maps of this ratio.
+
+Below, I show how this can be easily calculated in R, and this can easily be modified for a different county of interest. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(ggplot2)
+library(tidycensus)
+library(tigris)
+library(dplyr)
+library(mapview)
+```
+
+
+The next example will be to calculate the income ratio index which we described above, while not ideal, this should provide a simple visualization of income inequality within places. 
+
+First, we query the median household incomes in Bexar Census tracts, then the income for Bexar county as a whole, and form the ratio.
+
+
+```{r, results="hide"}
+bex_tract<-get_acs(geography="tract", state = "TX", county = "Bexar", year=2018,variables = "B19013_001E", output = "wide", geometry = T)
+
+bex_tract<-bex_tract%>%
+  mutate(med_inc_tr=B19013_001E, cofips=substr(GEOID, 1,5))
+
+pa_counties<-get_acs(geography="county", state = "TX",output="wide",  year=2018,variables = "B19013_001E")
+
+bex_county<-pa_counties%>%
+  filter(GEOID=="48029")%>%
+  mutate(med_inc_co=B19013_001E)%>%
+  select(GEOID, med_inc_co)
+
+bexar_merge<-geo_join(bex_tract, bex_county, by_sp="cofips", by_df="GEOID")
+
+bexar_merge$inc_ratio<-bexar_merge$med_inc_tr/bexar_merge$med_inc_co
+
+```
+
+
+Now we create a map of the ratio in the tracts within Bexar County. we see that the west and east sides of the city have incomes lower than the county, while the north side, and especially the area of Shavano park have higher incomes that the county as a whole. 
+
+```{r}
+bexar_merge%>%
+  filter(is.na(inc_ratio)==F)%>%
+  mutate(inc_ratio = cut(inc_ratio, breaks = c(.2, .5, 1, 1.5, 2, 2.5, 3, 4) , include.lowest = T))%>%
+  ggplot()+geom_sf(aes(fill=inc_ratio))+
+  scale_fill_brewer(palette = "RdBu")+
+  scale_color_brewer(palette = "RdBu")+
+  ggtitle("Ratio of Tract Income to County Income", subtitle = "Bexar County, TX - 2018 ACS")
+
+
+
+
+```
+
+
+```{r interactive}
+mapviewOptions(vector.palette = colorRampPalette(RColorBrewer::brewer.pal(n = 7, name = "RdBu")),
+               na.color = "grey",
+               layers.control.pos = "topright")
+
+mapview(bexar_merge["inc_ratio"], layer.name="Income Ratio")
+```

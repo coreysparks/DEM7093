@@ -1,0 +1,60 @@
+---
+title: "Tidycensus Setup and Use"
+author: "Corey Sparks, PhD"
+date: "2/10/2020"
+output:
+   html_document:
+    df_print: paged
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    includes:
+      in_header: logo.html
+---
+
+This example will show you how to setup the `tidycensus` package in R
+```{r}
+citation(package = "tidycensus")
+```
+
+### Steps
+
+ 1. Go to the [US Census Developer API](http://api.census.gov/data/key_signup.html) and request a key, it will be emailed to you.
+ 2. Follow the directions in the email to activate your key
+ 3. In R install `tidycensus` using `install.packages("tidycensus", dep=T)`
+ 4. Wait for it to install
+ 5. Once it is finished, load the library, `library(tidycensus)`
+ 6. Save your API key to your working directory. Type `tidycensus::census_api_key(key =  "yourkeyhere", install = T)`
+ 7. Restart R
+ 8. Test it, below I load the variables for the 2017 5 year ACS Data Profile tables, and search for a variable that includes the text "Built 2000 to 2009", and display the "name" and "label" fields from the table.
+ 
+```{r}
+
+library(tidycensus)
+v15_Profile <- load_variables(2017 , "acs5/profile", cache = TRUE) #demographic profile tables
+v15_Profile[grep(x = v15_Profile$label, "Built 2000 to 2009"), c("name", "label")]
+
+```
+
+I see that the variable `DP04_0019P` is the Percentage estimate for the % of houses built between 2000 and 2009. 
+Alternatively, you can go to the Census's list of variables for the ACS Data Profile tables [here](https://api.census.gov/data/2017/acs/acs5/profile/variables.html) and search.
+
+I can extract the variable, in this case for Texas counties and their associated geographies using:
+
+```{r setup, include=FALSE}
+
+mydat<- get_acs(geography = "county", state = "TX", variables = "DP04_0019P", year=2017,
+                 geometry = T, output = "wide")
+head(mydat)
+
+```
+
+
+### Make a quick interactive map
+Below, I use the `mapview` library to quikly map the data. You must have `mapview` installed for this to work
+
+```{r}
+library(mapview)
+mapview(mydat["DP04_0019PE"], legend = T, layer.name = "% Housing built 2000 to 2009")
+
+```

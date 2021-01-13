@@ -1,0 +1,244 @@
+---
+title: "DEM 7093 GIS Summer 2018 - R mapping examples using American Community Survey - Change Mapping"
+author: "Corey S. Sparks, PhD"
+date: "June 6, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This example will use R to downloard American Coummunity Survey summary file tables using the `tidycensus` package. The goal of this example is to illustrate how to download data from the Census API using R and to illustrate how to create basic descriptive maps of attributes. 
+
+The example will use data from San Antonio, Texas from the 2015 American Community Survey summary file.
+
+###Get a Census developer API Key
+Obtain one at http://api.census.gov/data/key_signup.html
+
+###Save your API key to your working directory
+use `census_api_key(key =  "yourkeyhere", install = T)`
+
+one time to install your key for use in `tidycensus`
+
+
+
+```{r, eval=FALSE, include=FALSE}
+#install.packages("censusapi")
+#don't use my key, put yours in here
+#use install=T one time only
+#library(censusapi)
+census_api_key(key =  "f67be5a86e696eebf0c84a5a20d85f2c04f7e9ef")
+```
+
+
+
+
+###Look at available ACS variables
+```{r}
+library(tidycensus);  library(tidyverse); library(sf)
+v15_Profile <- load_variables(2015, "acs5/profile", cache = TRUE) #demographic profile tables
+v15_tables <- load_variables(2015 , "acs5", cache = TRUE) #all tables
+#v10_sf1_tables <- load_variables(2010 , "sf1", cache = TRUE) #all tables for 2010 SF1
+#v10_sf1_tables <- load_variables(2000 , "sf3", cache = TRUE) #all tables for 2000 SF#
+
+View(v15_Profile)
+
+#Search for variables by 
+v15_Profile[grep(x = v15_Profile$label, "HighSchool"), c("name", "label")]
+v15_Profile[grep(x = v15_Profile$label, "Built 2000 to 2009"), c("name", "label")]
+```
+
+##Extract from ACS summary file data profile variables from 2015 for Bexar County, TX Census Tracts
+
+The data profile tables are very useful because they contain lots of pre-calculated variables.
+
+```{r, results='hide'}
+sa_acs<-get_acs(geography = "tract", state="TX", county = c("Bexar"), year = 2015,
+                variables=c( "DP05_0001E", "DP03_0009P", "DP03_0062E", "DP03_0119PE",
+                            "DP05_0001E","DP02_0009PE","DP02_0008PE", "DP02_0040E","DP02_0038E",
+                            "DP02_0066PE","DP02_0067PE","DP02_0080PE","DP02_0092PE",
+                            "DP03_0005PE","DP03_0028PE","DP03_0062E","DP03_0099PE","DP03_0101PE",
+                            "DP03_0119PE","DP04_0046PE","DP05_0072PE","DP05_0073PE",
+                            "DP05_0066PE", "DP05_0072PE", "DP02_0113PE") ,
+                summary_var = "B01001_001",
+                geometry = T, output = "wide")
+
+#create a county FIPS code - 5 digit
+sa_acs$county<-substr(sa_acs$GEOID, 1, 5)
+
+#rename variables and filter missing cases
+sa_acs2<-sa_acs%>%
+  mutate(totpop= DP05_0001E,tpop_cv=(DP05_0001M/1.645)/DP05_0001E ,
+         phsormore=DP02_0066PE,phsormore_cv=(DP02_0066PM/1.645)/DP02_0066PE, medhhinc=DP03_0062E,ppov=DP03_0119PE ) %>%
+#  st_transform(crs = 102740)%>%
+  filter(complete.cases(totpop, phsormore, medhhinc))
+
+#(acs.sub$medhhinc_ME/1.645) / acs.sub$medhhinc) * 100
+
+class(sa_acs2)
+```
+
+##Write data out to shapefile
+```{r, message=FALSE, warning=FALSE, eval=F}
+#change the directory
+sf::st_write(sa_acs2,dsn="C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data",layer="sa_tract_dp", driver="ESRI Shapefile", delete_layer=T, update=T)
+
+```
+
+##mapping of errors in variables
+Here I generate a quantile break for the coefficient of variation in census tract population estimates 
+```{r, message=FALSE}
+
+library(classInt)
+library(dplyr)
+
+cv_map<-sa_acs2 %>%
+  mutate(cv_cut=cut(tpop_cv,breaks = quantile(tpop_cv, na.rm=T, p=seq(0,1,length.out = 6)),include.lowest = T),
+         ed_cut=cut(phsormore_cv,breaks = quantile(phsormore_cv, na.rm=T, p=seq(0,1,length.out = 6)),include.lowest = T) )
+
+library(ggsn)
+p1<-ggplot(cv_map, aes(fill = cv_cut, color = cv_cut)) + 
+  geom_sf() + 
+  ggtitle("Coefficent of Variation in Population Estimate", 
+          subtitle = "Bexar County Texas, 2015 ACS")+
+    scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(cv_map)+
+  scalebar(cv_map, dist = 5,  dd2km =T, model="GRS80", st.size = 2)
+p1
+
+
+
+p2<-ggplot(cv_map, aes(fill = ed_cut, color = ed_cut)) + 
+  geom_sf() + 
+  ggtitle("Coefficent of Variation in Estimate of % Greater than High School", 
+          subtitle = "Bexar County Texas, 2015 ACS")+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+    theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(cv_map)+
+  scalebar(cv_map, dist = 5,  dd2km =T, model="GRS80", st.size = 2)
+p2
+  
+```
+
+##Change map between two time points
+When we have data that are collected over time on the same geographies, we may be interested in whether the variable we're mapping has changed much over time. 
+
+In the ACS, we can compare two estimates if the years used to produce the esimates do not overlap. For instance, we could compare the 2005-2009 estimates to the 2011-2015 estimates, but we could **not** compare the 2010-2014 to the 2011-2015, becuase they share years of data. See [this](https://www.census.gov/programs-surveys/acs/guidance/comparing-acs-data.html) for the official position on the subject.
+
+
+##compare median household incomes
+Here we take the median houshold income in tracts derived from the 2007-2011 ACS and compare it to the estimate from the 2011-2015 ACS
+```{r}
+#v11_Profile <- load_variables(2011 ,dataset =  "acs5") #demographic profile 
+
+options(tigris_use_cache = TRUE)
+#2009 ACS
+
+acs_11<-get_acs(geography = "tract", state="TX", county = "029", year = 2011, variables="B19013_001",geometry = TRUE, output = "wide")
+
+#2015 ACS
+acs_15<-get_acs(geography = "tract", state="TX", county = "Bexar", year = 2015, variables="B19013_001",geometry = TRUE, output = "wide")
+
+#create variables with nice names
+acs_11<-acs_11%>%
+  mutate(inc11=B19013_001E, inc11err=B19013_001M)%>%
+  select(GEOID, NAME, inc11, inc11err)
+#create variables with nice names
+acs_15<-acs_15%>%
+  mutate(inc15=B19013_001E, inc15err=B19013_001M)%>%
+  select(GEOID, NAME, inc15, inc15err)
+
+#merge the two years worth of data
+mdat<-left_join(acs_11, as.data.frame(acs_15), by="GEOID", st_join=FALSE)
+
+head(mdat)
+```
+
+
+Here I create a function that implements the [testing  procedure](https://www.psc.isr.umich.edu/dis/acs/handouts/Compass_Appendix.pdf) used by the Census for comparing estimates across year
+```{r}
+acstest<-function(names,geoid, est1, err1, est2, err2, alpha, yr1, yr2, span){
+  se1<-err1/qnorm(.90)
+  se2<-err2/qnorm(.90)
+  yrs1<-seq(yr1, to=yr1-span)
+  yrs2<-seq(yr2, to=yr2-span)
+
+  C<-mean(yrs2%in%yrs1)
+  diff<- (est1-est2)
+  test<-(est1-est2) / (sqrt(1-C)*sqrt((se1^2+se2^2)))
+  crit<-qnorm(1-alpha/2)
+  pval<-2*pnorm(abs(test),lower.tail=F)
+  result<-NULL
+  result[pval > alpha]<-"insignificant change"
+  result[pval < alpha & test > 0]<- "significant increase"
+  result[pval < alpha & test < 0]<-"significant decrease" 
+  
+  data.frame(name=names,geoid=geoid, est1=est1, est2=est2, se1=se1, se2=se2,difference=diff, test=test, result=result, pval=pval)
+}
+```
+
+
+Here I use the function I just made to do the comparisons
+```{r}
+diff0915<-acstest(names = mdat$NAME.x, geoid = mdat$GEOID, est1 = mdat$inc11*1.07, est2 = mdat$inc15, err1 = mdat$inc11err*1.12, err2=mdat$inc15err, alpha = .1, yr1 = 2011, yr2=2015, span = 5)
+
+head(diff0915)
+
+```
+
+```{r, fig.height=10, fig.width=12}
+options(scipen=999)
+acs_merge<-left_join(sa_acs, diff0915, by=c("GEOID"="geoid"))
+brks<-quantile(c(acs_11$inc11, acs_15$inc15),  probs = seq(0,1,.2), na.rm=T)
+acs_11map<-acs_11%>%
+  mutate(inc_q = cut(inc11,breaks = brks, include.lowest = T))
+
+p1<-ggplot(acs_11map, aes( fill=inc_q, color=inc_q))+
+  geom_sf() + 
+  ggtitle("Median Household Income 2011 ", 
+          subtitle = "Bexar County Texas")+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  #scale_fill_manual(values=myfil)+
+    theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(acs_11map)+
+  scalebar(acs_11map, dist = 5,  dd2km =T, model="GRS80", st.size = 2)
+
+acs_15map<-acs_15%>%
+  mutate(inc_q = cut(inc15,breaks = brks, include.lowest = T))
+
+p2<-ggplot(acs_15map, aes( fill=inc_q, color=inc_q))+
+  geom_sf() + 
+  ggtitle("Median Household Income 2015 ", 
+          subtitle = "Bexar County Texas")+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  #scale_fill_manual(values=myfil)+
+    theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(acs_15map)+
+  scalebar(acs_15map, dist = 5,  dd2km =T, model="GRS80", st.size = 2)
+
+
+myfil<-c("grey", "red", "blue")
+p3<-ggplot(acs_merge, aes( fill=result))+
+  geom_sf() + 
+  ggtitle("Comparison of Median Household Income 2011 to 2015", 
+          subtitle = "Bexar County Texas")+
+  #scale_fill_brewer(palette = "Accent") + 
+  #scale_color_brewer(palette = "Accent")+
+  scale_fill_manual(values=myfil)+
+    theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(acs_merge)+
+  scalebar(acs_merge, dist = 5,  dd2km =T, model="GRS80", st.size = 2)
+
+
+library(gridExtra)
+
+out<-grid.arrange(p1, p2, p3, nrow = 2)
+out
+```
+

@@ -1,0 +1,41 @@
+---
+title: "DEM 7093 GIS Summer 2018 - Geocoding with R and ggmap"
+author: "Corey S. Sparks, PhD"
+date: "June 14, 2018"
+output: html_document
+---
+
+
+```{r}
+
+#load ggmap
+library(ggmap)
+
+#load csv of addresses:
+addr<-read.csv("C:/Users/ozd504/Downloads/classheb.csv", header = T, stringsAsFactors = T)
+
+addr$addrtext<-gsub('^[0-9]+|[0-9]+$',x= addr$Physical.Address, replacement = "")
+
+write.csv(addr, file="~/Google Drive/classes/dem7093/GIS_class_2018/data/hebs_ready.csv")
+
+# Select the file from the file chooser
+#fileToLoad <- file.choose(new = TRUE)
+
+# Read in the CSV data and store it in a variable 
+#origAddress <- read.csv(fileToLoad, stringsAsFactors = FALSE)
+
+# Initialize the data frame
+geocoded <- data.frame(stringsAsFactors = FALSE)
+
+# Loop through the addresses to get the latitude and longitude of each address and add it to the
+# origAddress data frame in new columns lat and lon
+for(i in 1:nrow(addr))  {
+  # Print("Working...")
+  result <- geocode(location = addr$address[i], output = "latlona", source = "google", override_limit = T)
+ addr$lon[i] <- as.numeric(result[1])
+  addr$lat[i] <- as.numeric(result[2])
+  addr$geoAddress[i] <- as.character(result[3])
+}
+# Write a CSV file containing origAddress to the working directory
+write.csv(origAddress, "geocoded.csv", row.names=FALSE)
+```

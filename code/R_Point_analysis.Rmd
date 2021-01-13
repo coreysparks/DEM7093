@@ -1,0 +1,268 @@
+---
+title: "DEM 7093 - Using R for Point analysis Part 1"
+author: "Corey S. Sparks, Ph.D. - University of Texas at San Antonio"
+date: "June 12, 2018"
+output: html_document
+---
+
+In this example I will use QGIS geoprocessing scripts through the `RQGIS` library in R. I will use data from the 2005 Peru Demographic and Health Survey, where I construct Voronoi polygons from the primary sampling unit locations and generate estimates of educational attainment for women.
+
+```{r}
+
+library(sf)
+library(RQGIS3) 
+library(dplyr)
+library(mapview)
+```
+
+```{r}
+peru_dhs_points<-st_read("C:/Users/ozd504/Google Drive/classes/dem7093/dem7093_20/data/PEGE5BFL", "PEGE52FL")
+peru_dhs_points<-st_transform(peru_dhs_points, crs=24892)
+#project the data into a meter based system
+mapview(peru_dhs_points["DHSCLUST"])
+```
+
+
+##Set up QGIS environment
+This lets R find where your QGIS binaries are located. `set_env()` should work without you specifying the path
+```{r}
+my_env<-set_env()
+open_app()
+```
+
+#Buffer analysis
+First we find the name of the algorithm for point buffering
+```{r}
+find_algorithms(search_term = "buffer", qgis_env = my_env)
+
+```
+For this, we'll use the `native:buffer` function, but we need to see what the arguments to the function are:
+
+```{r, results='hide'}
+
+#get_usage(alg="native:buffer")
+```
+so we have 5 arguments, when we use the function, we need to specify all of these:
+
+```{r}
+
+params <- get_args_man(alg = "native:buffer")
+
+```
+
+Here I do a 5km buffer around each PSU location.
+
+```{r}
+wd<-"C:/Users/ozd504/OneDrive - University of Texas at San Antonio/gis_classwork/"
+params$INPUT <-peru_dhs_points
+params$DISTANCE<-5000 #5km around each point
+params$OUTPUT<-file.path(wd, "peru_psu_buffer_5k.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_buff <- run_qgis(alg = "native:buffer",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+st_crs(peru_buff)<-24892
+mapview(peru_buff["DHSCLUST"], legend=T,map.types="OpenStreetMap")
+
+```
+
+## buffer using R
+```{r}
+buf2<-st_buffer(peru_dhs_points, dist = 5000)
+mapview(buf2["DHSCLUST"])
+```
+5km buffers done! Now, If I only had some other point data, I could do some point in polygon operations!
+
+##Vonoroi polygons
+```{r}
+find_algorithms(search_term = "Voronoi")
+#get_usage(alg="qgis:voronoipolygons", qgis_env = my_env, intern = F)
+```
+so we have 3 arguments, when we use the function,:
+
+```{r}
+
+params <- get_args_man(alg = "qgis:voronoipolygons", qgis_env = my_env)
+
+
+```
+
+
+```{r}
+params$INPUT <-peru_dhs_points
+params$OUTPUT<-file.path(wd, "peru_psu_von_poly.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_von <- run_qgis(alg = "qgis:voronoipolygons",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+
+st_crs(peru_von)<-24892
+mapview(peru_von["DHSCLUST"],map.types="OpenStreetMap")
+
+```
+
+### I can't figure out how to use R for this
+
+The polygons obviously have issues, so we can clip them to the Peruvian border:
+
+```{r}
+find_algorithms(search_term = "clip")
+#get_usage(alg="native:clip")
+```
+
+so we have 3 arguments, when we use the function,:
+
+```{r}
+
+params <- get_args_man(alg = "native:clip")
+
+
+```
+
+
+```{r}
+peru_border<-st_read("C:/Users/ozd504/Google Drive/classes/dem7093/dem7093_20/data/PER_adm", "PER_adm0")
+peru_border<-st_transform(peru_border,crs=24892)
+
+params$INPUT <-peru_von
+params$OVERLAY<-peru_border
+params$OUTPUT<-file.path(wd, "peru_psu_von_poly_clip.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_von_clip <- run_qgis(alg = "native:clip",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+
+mapview(peru_von_clip["DHSCLUST"],map.types="OpenStreetMap")
+
+
+```
+
+### Using R
+You can use st_clip to clip observations to a polygon
+```{r}
+pclip<-st_intersection(peru_von, peru_border)
+# pclip2<-peru_von%>%
+#   filter(st_contains( peru_border, ., sparse = F))
+
+plot(pclip["DHSCLUST"])
+
+```
+
+##points in polygons
+See what the right script is, and what arguments it needs:
+
+```{r}
+find_algorithms(search_term = "in polygon")
+#get_usage(alg="qgis:countpointsinpolygon", qgis_env = my_env, intern = F)
+```
+
+```{r}
+
+params <- get_args_man(alg = "qgis:countpointsinpolygon", qgis_env = my_env)
+
+
+```
+
+5km buffers done! Now, we need to do our point in polygon operation. So I read in the Peruvian school data. These are a csv file, but have lat/long specified, so I can read in the text and make a simple feature layer from it. You can't have missing information in the coordinate data to do this.
+
+```{r}
+
+schools<-read.csv("C:/Users/ozd504/Google Drive/classes/dem7093/dem7093_20/data/perusecondaryschools.csv", header=T)
+schools<-schools%>%
+  filter(complete.cases(Latitud, Longitud))
+
+persch<-st_as_sf(schools, coords=c("Longitud", "Latitud"), crs=4326,agr="constant")
+persch<-st_transform(persch,crs=24892 )
+
+mapview(persch["Departamento"])
+```
+
+##make the parameter block
+```{r}
+params$POLYGONS <-peru_buff
+params$POINTS<-persch
+params$OUTPUT<-file.path(wd, "peru_schoolsinbuffer.shp") # path to the output shapefile
+```
+
+now we have our parameters defined, we run the script:
+```{r}
+peru_pip <- run_qgis(alg = "qgis:countpointsinpolygon",
+                    params = params,
+                    load_output = TRUE,
+                    qgis_env = my_env)
+
+mapview(peru_pip["NUMPOINTS"],map.types="OpenStreetMap", legend=T)
+
+#recode the count of schools to be binary (0 or more than 0 schools)
+peru_pip$closeschool<-ifelse(peru_pip$NUMPOINTS>0,1,0)
+summary(peru_pip$closeschool)
+```
+
+So we see that 92.8% of communities have a secondary school within 5km, that's great, but what about the communities that don't?
+
+
+## using R
+
+```{r}
+sfpip<-lengths(st_intersects( peru_buff,persch))
+peru_buff$nschools<-sfpip
+hist(peru_buff$nschools)
+```
+
+## use these in an analysis
+
+Here we load the 2005 DHS data, and do some recodes for educational attainment, age, and get the survey design variables. 
+
+```{r}
+library(haven)
+library(survey)
+library(dplyr)
+
+peru_data<-read_dta("C:/Users/ozd504/Google Drive/classes/dem7093/dem7093_20//data/PEIR51FL.DTA")
+
+peru_data<-peru_data%>%
+  mutate(eduprim=ifelse(v106==1,1,0),
+  edusecplus=ifelse(v106!=9&v106>=2,1,0),
+  pwt=v005/1000000, 
+  age=v012)%>%
+  select(v000, v021, v022,v024,age, pwt, eduprim, edusecplus )
+
+head(peru_data)
+
+peru_data$one<-1
+des<-svydesign(ids=~v021, strata=~v022, weights=~pwt, data=peru_data, nest = T)
+counts<-svyby(~edusecplus+one, ~v021, des, FUN = svytotal)
+head(counts)
+```
+
+Now we merge the survey to the spatial data:
+```{r}
+
+peru_merge<-left_join(peru_data,peru_pip,by=c("v021"="DHSCLUST"))
+
+```
+
+In order to test for the effect of school access on women's educational attainment, we use a binomial generalized linear mixed model. We control for the survey design using a nested random effect specification (PSUs within strata).
+
+```{r}
+des<-svydesign(ids=~v021, strata=~v022, weights=~pwt, data=peru_merge, nest = T)
+
+fit<-svyglm(edusecplus~closeschool+scale(age), family = binomial, design=des)
+
+summary(fit)
+
+```
+So, we see in this case that if women lived within 5km of a secondary school, they are much more likely to have a secondary education or more, compared to woman living in a community without a school within 5km. 
+

@@ -1,0 +1,121 @@
+---
+title: "DEM 7093 - Projecting Data"
+author: "Corey S. Sparks, Ph.D. - University of Texas at San Antonio"
+date: "June 7, 2018"
+output: html_document
+---
+
+
+##Geographic projections
+In the GIS world, maps are projected by various means. Typically these projections are used in order to make the most accurate representation of a particular area on the Earth's surface. 
+
+Any data you download should come with it's projection information in a **.prj** file. Having a look at this will tell you what the projection is.
+
+Here is an example from data I downloaded from the Census on US counties. I downloaded it from [Here](https://www.census.gov/cgi-bin/geo/shapefiles/index.php?year=2015&layergroup=Counties+%28and+equivalent%29)
+![US County PJR file](C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data/uscounty_prj.PNG)
+
+Which shows that the data are in the North American Datum, 1983 **Geographic coordinate system** or GCS. Data with a GCS projection are always projected in Latitude/Longitude and distances are measured in degrees, minutes and seconds of lat/long, not in linear distances.
+
+[Here](https://www.ibm.com/support/knowledgecenter/en/SSEPGG_11.1.0/com.ibm.db2.luw.spatial.topics.doc/doc/csb3022a.html) is a good presentation on coordinate systems.
+
+If you want to measure distances you need to convert your data into a **Projected Coordinate System**, which projects the data into a linear grid system where distances can be measured in regular units (feet or meters, typically).
+
+If you are simply making a map this won't matter in practice.
+
+###Using tigris
+The `tigris` [library](https://cran.r-project.org/web/packages/tigris/index.html) in R is very useful if you want any type of geographic data Census produces. I would recommend using this. 
+
+It is loaded if you use `tidycensus` as well, and when you use `get_acs(..., geometry = TRUE)`, `tigris` is doing the downloading of the spatial information. 
+
+###R functions for reading in data
+If your data aren't coming from Census, and your data are downloaded as a shapefile, then you typically get a .zip file which contains all of the files associated with your shapefile:
+
+![all those files!](C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data/shpfile.PNG)
+
+There are a few ways in R to read your shapefile in. The `rgdal` library is good, but we are working a lot with simple features in this class, so we can read data in using the `sf` library as well, as it relies on the same tools as `rgdal` to read data. Notably, the [GDAL library](http://www.gdal.org) is used to process the spatial data.
+
+
+The `st_read()` function is what we'll use here. It has two main arguments, **dsn** and **layer**. dsn is the folder location where your data are, and layer is the name of the actual shapefile (in this case) name.
+
+```{r, results='hide'}
+
+library(sf)
+library(tigris)
+usco<-st_read(dsn="C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data/uscounties", layer = "tl_2015_us_county")
+
+#use tigris for this data:
+options(tigris_class = "sf")
+usco_tig<-counties( cb=T, year=2015)
+```
+
+We see that it is a multipolgon data set, and that it's projection code (EPSG) is [4269](http://spatialreference.org/ref/epsg/nad83/). EPSG stands for *European Petroleum Survey Group*, they like to keep there geography straight, obviously. For all you ever wanted to know about EPSG codes go [here](http://www.epsg.org), and to search for codes, go [here](http://spatialreference.org/ref/epsg/). 
+
+the `proj4string` tells the details about the projected data, here, we see it's projected in long/lat coordinates, and has the NAD83 datum. 
+
+What does it look like?
+```{r}
+plot(usco["STATEFP"])
+
+
+```
+
+So it's large, this has all territories possessed by the United States in it, that's why there are dots everywhere. 
+
+Let's re-project the data into a coordinate system for North America. We will use a [North American Albers projection based off NAD83](http://spatialreference.org/ref/esri/usa-contiguous-albers-equal-area-conic/)
+
+sf has the `st_transform()` function that will convert our data into a defined projection.
+
+```{r}
+us_proj<-st_transform(usco,crs=102003)
+#1020003 is the EPSG code for our Albers projection
+
+plot(us_proj["STATEFP"])
+```
+So, this is much more US centered. You see the difference between the Geographic projection and the Projected data as well. Let's do something silly:
+
+```{r}
+
+us_silly<-st_transform(usco, crs=3577)
+plot(us_silly["STATEFP"])
+
+```
+
+So, what this did was use an Australian projected coordinate system to project the US data. It basically distorts the data so badly, because that system isn't meant to be used for North America.
+
+This illustrates why projections matter. 
+
+Let's have a closer look at the US again, focusing on Texas. We will us a [State Plane](http://spatialreference.org/ref/esri/nad-1983-stateplane-texas-south-central-fips-4204-feet/) projection for these data.
+
+You can see the difference, the projected data looks like it is *curved* slightly, compared to the unprojected data. 
+```{r}
+plot(usco[usco$STATEFP=="48", "STATEFP"], main="Texas counties, NAD83")
+
+tx_proj<-st_transform(usco[usco$STATEFP=="48",] , crs= 102740)
+plot(tx_proj["STATEFP"], main="Texas counties, State Plane South Central TX")
+```
+
+##Measuring distances
+Now we look at how the type of projection matters for measuring distances. I use the example of the distance between Bexar county and Dallas county. Google maps says it's 272 mile from my house to Dallas.
+
+The `st_distance()` function will calculate distances between features
+```{r}
+sub_co<-tx_proj[tx_proj$COUNTYFP%in%c("029", "113"),]
+sub_aus<-us_silly[us_silly$STATEFP=="48"&us_silly$COUNTYFP%in%c("029", "113"),]
+st_distance(st_centroid(sub_co))/5280 #convert feet to miles
+st_distance(st_centroid(sub_aus))*0.000621371 #australian proj is in meters, convert meters to miles
+```
+
+So we see that the projection system designed for Texas puts th distance at 250.9 miles, while the system designed for Australia puts it at 217.2 miles, a notable difference.
+
+Take home message: use an appropriate projection system for **your** data.
+
+##Saving spatial data out of R
+R is good at reading these data in, projecting them and we can also write the data out again, in case we wanted to share them or use them in QGIS. 
+
+```{r, results='hide', message=FALSE, warning=FALSE}
+st_write(tx_proj,dsn = "C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data", layer = "tx_counties_proj", driver = "ESRI Shapefile", delete_dsn = T )
+
+```
+
+
+For more map fun, try [this site](https://thetruesize.com/#?borders=1~!MTU5MjE0NzQ.NDIzNDQ3NQ*MzMwMDE5MjQ(NDQ5MDIwNQ~!CONTIGUOUS_US*MTAwMjQwNzU.MjUwMjM1MTc(MTc1)MA~!IN*NTI2NDA1MQ.Nzg2MzQyMQ)MQ~!CN*OTkyMTY5Nw.NzMxNDcwNQ(MjI1)Mg)

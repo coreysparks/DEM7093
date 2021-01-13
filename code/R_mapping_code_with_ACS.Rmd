@@ -1,0 +1,161 @@
+---
+title: "DEM 7093 GIS Summer 2018 - R mapping examples using American Community Survey"
+author: "Corey S. Sparks, PhD"
+date: "June 4, 2018"
+output:
+  word_document: default
+  html_document: default
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Objectives
+
+This lesson has two objectives:
+
+  1. Use the `tidycensus` package to download Census data
+  2. Use `ggplot` and `mapview` functions to produce maps of these data
+
+
+This example will use R to downloard American Coummunity Survey summary file tables using the `tidycensus` package. The goal of this example is to illustrate how to download data from the Census API using R and to illustrate how to create basic descriptive maps of attributes. 
+
+The example will use data from San Antonio, Texas from the 2015 American Community Survey summary file.
+
+###Get a Census developer API Key
+Obtain one at http://api.census.gov/data/key_signup.html
+
+###Save your API key to your working directory
+use `census_api_key(key =  "yourkeyhere", install = T)`
+
+one time to install your key for use in `tidycensus`
+
+
+
+```{r, eval=FALSE, include=FALSE}
+#install.packages("censusapi")
+#don't use my key, put yours in here
+#use install=T one time only
+#library(censusapi)
+census_api_key(key =  "f67be5a86e696eebf0c84a5a20d85f2c04f7e9ef")
+```
+
+\newpage
+
+
+### Look at available ACS variables
+We may not know the variable name we need for a particular project, but there are functions in the `tidycensus` library to help find variables. For example, if we are interested in variables from the ACS [data profile](https://www.census.gov/acs/www/data/data-tables-and-tools/data-profiles/2016/) tables, we can load all available variables then use R to search for what we need.
+
+
+```{r, message=FALSE}
+library(tidycensus);  library(tidyverse); library(sf)
+v15_Profile <- load_variables(2015 , "acs5/profile", cache = TRUE) #demographic profile tables
+
+View(v15_Profile)
+
+#Search for variables by keywords in the label 
+v15_Profile[grep(x = v15_Profile$label, "POVERTY"), c("name", "label")]
+v15_Profile[grep(x = v15_Profile$label, "Built 2000 to 2009"), c("name", "label")]
+```
+
+\newpage
+## Extract from ACS summary file data profile variables from 2015 for Bexar County, TX Census Tracts
+
+The data profile tables are very useful because they contain lots of pre-calculated variables.
+
+Here is a query where we extract several variables from tehe 2015 ACS for Bexar County, Texas. We can also get the spatial data by requesting `geometry=TRUE`.  Useing `output="wide"` will put each variable in a column of the data set, with each row being a census tract. 
+
+```{r, results='hide'}
+sa_acs<-get_acs(geography = "tract", state="TX", county = c("Bexar"), year = 2015,
+                variables=c( "DP05_0001E", "DP03_0009P", "DP03_0062E", "DP03_0119PE",
+                           "DP05_0001E","DP02_0009PE","DP02_0008PE","DP02_0040E","DP02_0038E",
+                            "DP02_0066PE","DP02_0067PE","DP02_0080PE","DP02_0092PE",
+                        "DP03_0005PE","DP03_0028PE","DP03_0062E","DP03_0099PE","DP03_0101PE",
+                            "DP03_0119PE","DP04_0046PE","DP05_0072PE","DP05_0073PE",
+                            "DP05_0066PE", "DP05_0072PE", "DP02_0113PE") ,
+                geometry = T, output = "wide")
+
+#create a county FIPS code - 5 digit
+sa_acs$county<-substr(sa_acs$GEOID, 1, 5)
+
+#rename variables and filter missing cases
+sa_acs2<-sa_acs%>%
+  mutate(totpop= DP05_0001E, fertrate = DP02_0040E,pwhite=DP05_0072PE, 
+         pblack=DP05_0073PE , phisp=DP05_0066PE, pfemhh=DP02_0008PE,
+         phsormore=DP02_0066PE,punemp=DP03_0009PE, medhhinc=DP03_0062E,
+         ppov=DP03_0119PE, pforn=DP02_0092PE,plep=DP02_0113PE) %>%
+#  st_transform(crs = 102740)%>%
+  na.omit()
+
+```
+
+## Write data out to shapefile
+```{r, message=FALSE, warning=FALSE, eval=F}
+#change the directory
+sf::st_write(sa_acs2,dsn="C:/Users/ozd504/Google Drive/classes/dem7093/GIS_class_2018/data",layer="sa_tract_dp", driver="ESRI Shapefile", delete_layer=T, update=T)
+
+```
+
+\newpage
+
+## Some basic mapping of variables
+Here I generate a quantile break for % black in census tracts and compare it to a Jenks break
+```{r, message=FALSE}
+#install.packages("classInt")
+#install.packages("patchwork")
+
+library(classInt)
+library(patchwork)
+
+#install.packages("dplyr")
+library(dplyr)
+
+pblack_map<-sa_acs2 %>%
+  mutate(cblack=cut(pblack,breaks = quantile(pblack, na.rm=T, p=seq(0,1,length.out = 6)),include.lowest = T),
+           jblack = cut(pblack,breaks=data.frame(classIntervals(var=sa_acs2$pblack, n=5, style="jenks")[2])[,1], include.lowest = T))
+library(ggsn)
+p1<-ggplot(pblack_map, aes(fill = cblack, color = cblack)) + 
+  geom_sf() + 
+  ggtitle("Proportion African American", 
+          subtitle = "Bexar County Texas, 2015 - Quantile Breaks")+
+    scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(pblack_map)+
+  scalebar(pblack_map, dist = 5,  dd2km =T, model="GRS80", st.size = 2)
+p1
+
+
+
+p2<-ggplot(pblack_map, aes(fill = jblack, color = jblack)) + 
+  geom_sf() + 
+  ggtitle("Proportion African American", 
+          subtitle = "Bexar County Texas, 2015 - Jenks Breaks")+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")+
+    theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(pblack_map)+
+  scalebar(pblack_map, dist = 5,  dd2km =T, model="GRS80", st.size = 2)
+p2
+  
+p1/ p2
+
+```
+
+\newpage
+
+## Interactive map with mapview
+
+```{r}
+library(mapview)
+library(RColorBrewer)
+pal <- colorRampPalette(brewer.pal(6, "Blues")) #set colors
+mapview(pblack_map["jblack"], col.regions=pal, legend=T,map.types="OpenStreetMap", layer.name="% African American")
+
+
+```
+
+
+

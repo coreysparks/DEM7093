@@ -1,0 +1,140 @@
+---
+title: "DEM 7093 Lab 1 using  R - Map projections"
+author: "Corey Sparks, Ph.D."
+date: "2/6/2020"
+output:
+   html_document:
+    df_print: paged
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    includes:
+      in_header: logo.html
+---
+
+### Get a Census developer API Key
+Obtain one at http://api.census.gov/data/key_signup.html
+
+### Save your API key to your working directory
+use `tidycensus::census_api_key(key =  "yourkeyhere", install = T)`
+
+one time to install your key for use in `tidycensus`
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidycensus)
+library(tidyverse)
+library(sf)
+library(ggplot2)
+v15_Profile <- load_variables(2015 , "acs5/profile", cache = TRUE) #demographic profile tables
+
+View(v15_Profile)
+
+#Search for variables by keywords in the label 
+v15_Profile[grep(x = v15_Profile$label, "POVERTY"), c("name", "label")]
+v15_Profile[grep(x = v15_Profile$label, "Built 2000 to 2009"), c("name", "label")]
+```
+
+\newpage
+## Extract from ACS summary file data
+
+Here I get data profile variables from 2017 for Bexar County, TX Census Tracts
+
+The data profile tables are very useful because they contain lots of pre-calculated variables.
+
+Here is a query where we extract several variables from tehe 2017 ACS for Bexar County, Texas. We can also get the spatial data by requesting `geometry=TRUE`.  Useing `output="wide"` will put each variable in a column of the data set, with each row being a census tract. 
+
+```{r, results='hide'}
+sa_acs<-get_acs(geography = "tract",
+                state="TX",
+                county = c("Bexar"),
+                year = 2017,
+                variables=c( "DP05_0001E", 
+                            "DP03_0119PE") ,
+                geometry = T, output = "wide")
+
+#create a county FIPS code - 5 digit
+sa_acs$county<-substr(sa_acs$GEOID, 1, 5)
+
+#rename variables and filter missing cases
+sa_acs2<-sa_acs%>%
+  mutate(totpop= DP05_0001E, ppov=DP03_0119PE) %>%
+#  st_transform(crs = 102740)%>%
+  na.omit()
+
+```
+
+## Write data out to shapefile
+```{r, message=FALSE, warning=FALSE, eval=F}
+#change the directory
+sf::st_write(sa_acs2,dsn="C:/Users/ozd504/Google Drive/classes/dem7093/dem7093_20//data",layer="sa_tract_dp03_R", driver="ESRI Shapefile", delete_layer=T, update=T)
+
+```
+
+\newpage
+
+## Some basic mapping of variables
+Here I generate a quantile break for % black in census tracts and compare it to a Jenks break
+```{r, message=FALSE}
+
+library(classInt)
+library(patchwork)
+library(dplyr)
+
+ppov_map<-sa_acs2 %>%
+  mutate(cpov=cut(ppov,breaks = quantile(ppov, na.rm=T, p=seq(0,1,length.out = 6)),include.lowest = T),
+           jpov = cut(ppov,breaks=data.frame(classIntervals(var=sa_acs2$ppov, n=5, style="pretty")[2])[,1], include.lowest = T))
+
+library(ggsn)
+
+p1<-ggplot(ppov_map, aes(fill = cpov, color = cpov)) + 
+  geom_sf() + 
+  ggtitle("Proportion in poverty", 
+          subtitle = "Bexar County Texas, 2017 - Quantile Breaks")+
+    scale_fill_brewer(palette = "Reds") + 
+  scale_color_brewer(palette = "Reds")+
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(ppov_map)+
+  scalebar(ppov_map, location="bottomleft", dist=5, transform = T,dist_unit = "km",  model="WGS84", st.size =2 )
+p1
+
+
+
+p2<-ggplot(ppov_map, aes(fill = jpov, color = jpov)) + 
+  geom_sf() + 
+  ggtitle("Proportion in Poverty", 
+          subtitle = "Bexar County Texas, 2017 - Jenks Breaks")+
+  scale_fill_brewer(palette = "Reds") + 
+  scale_color_brewer(palette = "Reds")+
+    theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  north(ppov_map)+
+  scalebar(ppov_map, location="bottomleft", dist=5, transform = T,dist_unit = "km",  model="WGS84", st.size =2)
+p2
+  
+p1/ p2
+
+```
+
+```{r, eval=FALSE}
+ggsave(filename="~/Google Drive/classes/dem7093/dem7093_20/code/lab1map1.png")
+
+```
+
+\newpage
+
+## Interactive map with mapview
+
+```{r}
+library(mapview)
+library(RColorBrewer)
+pal <- colorRampPalette(brewer.pal(6, "Blues")) #set colors
+mapview(ppov_map["jpov"], col.regions=pal, legend=T,map.types="OpenStreetMap", layer.name="% African American")
+
+
+```
+
+
+

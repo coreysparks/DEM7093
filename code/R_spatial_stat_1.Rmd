@@ -1,0 +1,494 @@
+---
+title: "DEM 7093 Spatial Statistics 1"
+author: "Corey S. Sparks, Ph.D. - The University of Texas at San Antonio"
+date: "June 25, 2018"
+output: 
+  html_document:
+   includes:
+      in_header: logo.html
+---
+
+
+#Conceptual Stuff
+##What's special about spatial?
+- Spatial data have more information than ordinary data
+
+- Think of them as a triplet - Y, X, and Z, where Y is the variable of interest, X is some other information that influences Y and Z is the geographic location where Y occurred
+
+- If our data aren't spatial, we don't have Z
+- Spatial information is a key attribute of behavioral data
+- This adds a potentially interesting attribute to any data we collect
+
+----
+
+- Spatial data monkey with models
+
+- Most analytical models have assumptions, spatial structure can violate these models
+
+- We typically want to jump into modeling, but without acknowledging or handling directly, spatial data can make our models meaningless
+
+- Some of the problems are..
+
+----
+
+##The Ecological fallacy
+- The tendency for aggregate data on a concept to show correlations when individual data on a concept do not.
+
+- In general the effect of aggregation bias, whereby those studying macro-level data try to make conclusions or statements about individual-level behavior
+
+- This also is felt when you analyze data at a specific level, say counties, your results are only generalizeable at that level, not at the level of congressional districts, MSA's or states. 
+
+- The often-arbitrary nature of aggregate units also needs to be considered in such analysis.
+
+----
+
+##MAUP
+- This is akin to the ecological fallacy and the notion of aggregation bias.
+
+-The MAUP occurs when inferences about data change when the spatial scale of observation is modified. 
+
+- i.e. at a county level there may be a significant association between income and health, but at the state or national level this may become insignificant, likewise at the individual level we may see the relationship disappear.
+
+----
+
+-This problem also exists when we suspect that a characteristic of an aggregate unit is influencing an individual behavior, but because the level at which aggregate data are available, we are unable to properly measure the variable at the aggregate level. 
+
+-E.g. we suspect that neighborhood crime rates will the recidivism hazard for a parolee, but we can only get crime rates at the census tract or county level, so we cannot really measure the effect we want.
+
+#Spatial Structure
+- Structure is the idea that your data have an organization to them that has a specific spatial dimension
+
+- Think of a square grid
+- Each cell in the grid can be though of as being neighbors of other cells base on their proximity, distance, direction, etc.
+- This structure generally influences data by making them non-independent of  one another
+- At best, you can have a correlation with your neighbor
+- At worst, your characteristics are a linear or nonlinear function of your neighbors
+
+#Spatial Heterogeneity
+- Spatial heterogeneity is the idea that characteristics of a population or a sample vary by location 
+
+- This can manifest itself by generating clusters of like observations
+
+- Statistically, this is bad because many models assume constant variance, but if like observations are spatially co-incident, then variance is not constant	
+
+- This is really cool
+
+
+#Stationarity
+
+- Stationarity simply means that the process is not changing with respect to either time (i.e. time series analysis) or space.  
+
+- This implies that the process that has generated our data is acting the same way in all areas under study.  
+
+- The implications of Stationarity are that we can use a global statistic to measure our process and not feel too bad about it.
+
+- It also implies that our observations are iid (independent and identically distributed) with respect to one another
+
+- e.g. the parameters estimated by the regression of X on Y are the same throughout our area of study, and do not have a tendency to change. 
+
+- Also, it means the model estimated is equally well specified at all locations. *This is our general assumption in regression models*
+
+#Non Stationarity
+
+- If a process is *non-stationary* then the process changes with respect to time or space.
+
+- This implies that the process that has generated our data is not acting the same way in all areas, or the expected value (mean, or variance) of our data are subject to spatial fluctuations.  
+
+- If our data are subject to such fluctuations, the this implies that our global statistics are also subject to major local fluctuations. 
+
+- Meaning areas in our data can tend to cluster together and have similar values.
+
+
+#Autocorrelation
+
+- This can occur in either space or time
+
+- Really boils down to the non-independence between neighboring values
+
+- The values of our independent variable (or our dependent variables) may be similar because:
+
+- Our values occur 
+  - closely in time (temporal autocorrelation)
+  - closely in space (spatial autocorrelation)
+
+
+#Basic Assessment of Spatial Dependency
+
+- Before we can model the dependency in spatial data, we must first cover the ideas of creating and modeling neighborhoods in our data.
+
+- By neighborhoods, I mean the clustering or connectedness of observations
+
+- The exploratory methods we will cover today depend on us knowing how our data are arranged in space, who is next to who.  
+
+- This is important (as we will see later) because most correlation in spatial data tends to die out as we get further away from a specific location
+
+#Tobler's Law
+- Waldo Tobler [(1970)](http://isites.harvard.edu/fs/docs/icb.topic868440.files/tobler_s%20first%20law.pdf) suggested the first law of geography
+
+- *Everything is related to everything else", but near things are more related than distant things.*
+
+- We can see this better in graphical form:  We expect the correlation between the attributes of two points to diminish as the distance between them grows. 
+
+#Basic Spatial clustering
+
+- Clustering means that observations that are close geographically are close in other attributes. Autocorrelation is typically a local process. Meaning it typically dies out as distance between observations increase.
+
+- So our statistics that correct for, or in fact measure spatial association have to account for where we are with respect to the observation under present consideration. 
+
+- This is typically done by specifying/identifying the spatial connectivity between spatial observations. 
+
+- To measure clustering, we must first see who is next to who 
+
+#Spatial Connectivity
+ - Spatial connectivity, or a spatial neighborhood, is defined based on the interactions/associations between features in our data. 
+
+- This connectivity is often in terms of the spatial weight of an observation, in other words how much of the value of a surrounding observation do we consider when we are looking at spatial correlation.  
+
+- Typically the weight of a neighboring observation dies out the further it is away from our feature of interest.
+
+- There are two typical ways in which we measure spatial relationships
+- Distance and contiguity
+
+
+#Example of San Antonio
+```{r, results='hide'}
+library(tidycensus);  library(tidyverse)
+library(spdep)
+sa_acs<-get_acs(geography = "tract", state="TX", county = c("Bexar"), year = 2015,
+                variables=c("DP05_0001E", "DP03_0009P", "DP03_0062E", "DP03_0119PE",
+                            "DP05_0001E","DP02_0009PE","DP02_0008PE", "DP02_0040E","DP02_0038E",
+                            "DP02_0066PE","DP02_0067PE","DP02_0080PE","DP02_0092PE",
+                            "DP03_0005PE","DP03_0028PE","DP03_0062E","DP03_0099PE","DP03_0101PE",
+                            "DP03_0119PE","DP04_0046PE","DP04_0078PE","DP05_0072PE","DP05_0073PE",
+                            "DP05_0066PE", "DP05_0072PE", "DP02_0113PE") ,
+                geometry = T, output = "wide")
+
+sa_acs$county<-substr(sa_acs$GEOID, 1, 5)
+
+sa_acs2<-sa_acs%>%
+  mutate(totpop= DP05_0001E, fertrate = DP02_0040E,pwhite=DP05_0072PE, 
+         pblack=DP05_0073PE , phisp=DP05_0066PE, pfemhh=DP02_0008PE,
+         phsormore=DP02_0066PE,punemp=DP03_0009PE, medhhinc=DP03_0062E,
+         ppov=DP03_0119PE, pforn=DP02_0092PE,plep=DP02_0113PE) %>%
+  filter(complete.cases(totpop, ppov))
+```
+
+#Spatial Neighbors
+- There are many different criteria for deciding if two observations are neighbors
+
+- Generally two observations must be within a critical distance, d, to be considered neighbors.
+
+- This is the Minimum distance criteria, and is very popular.
+
+- This will generate a matrix of binary variables describing the neighborhood.
+
+- We can also describe the neighborhoods in a continuous weighting scheme based on the distance between them
+
+#Contiguity based neighbors
+In a general sense, we can think of a square grid. Cells that share common elements of their geometry are said to be "neighbors". There are several ways to describe these patterns, and for polygons, we generally use the rules of the chess board. 
+
+*Rook adjacency*
+Neighbors must share a line segment
+
+*Queen adjacency*
+Neighbors must share a vertex or a line segment
+
+If polygons share these boundaries (based on the specific definition: rook or queen), they are said to be "spatial neighbors" of one another. The figure below illustrates this principle.
+
+For an observation of interest, the pink area, the Rood adjacent areas are those in green in the figure, becuase they share a line segment. For the second part of the figure on the right, the pink area has different sets of neigbors, compared to the Rook rule neighbors, becuase the area also shares vertices with other polygons, making them Queen neighbors. 
+
+![Adjacency using Chessboard Rules](C:/Users/ozd504/Google Drive/classes/dem7263/Rcode15/images/adj.png)
+
+###Order of adjacency
+The figure above also highlights the order of adjacency among observations. By order of adjacency, we simply men that observations are either immediate neighbors (the green areas), or they are neigbors of immediate neighbors. These are referred to as first and second order neighbors. 
+
+So, we can see, that the yellow polygons are the neighboring areas for this tract, which allows us to think about what the *spatial structure* of the area surrounding this part of campus. 
+
+For an example, let's consider the case of San Antonio again. If our data are polygons, then there is a function in the `spdep` library in R, `poly2nb` that will take a polygon layer and find the neighbors of all areas using either a queen or rook rule. First we form the neighbors using the rook rule for all the tracts in Bexar County.
+
+```{r}
+
+library(spdep)
+nbsR<-poly2nb(as(sa_acs2, "Spatial"), queen=F, row.names = sa_acs2$GEOID)
+
+plot(as(sa_acs2, "Spatial"))
+plot(nbsR, coords= coordinates(as(sa_acs2, "Spatial")), add= T, col="red", cex=.75, pch='.')
+```
+
+
+This is a very complicated structure of neighbors because of the dense collection of tracts.
+
+
+#Distance based association
+The queen and rook rules are useful for polygon features, but distance based contiguity is useful for all feature types (points, polygons, lines). The idea is similar to the polygon adjacency rule from above, but the distance rule is based on the calculated distance between areas. There are a variety of distance metrics that are used in statistics, but the most commonly assumed one is the Euclidean distance. The Euclidean distance between any two points is:
+
+$$D^2 = \sqrt{\left (x_1 - x_2 \right)^2 + \left (y_1 - y_2 \right)^2 } $$
+Where x and y are the coordinates of each of the two areas. For polygons, these coordinates are typically the centroid of the polygon (you may have noticed this above when we were plotting the neighbor lists), while for point features, these are the two dimensional geometry of the feature. The collection of these distances between all features forms what is known as the distance matrix between observations. This summarizes all distances between all features in the data. Some analytical routines work with these *continuous* distances, but most of the spatial anlaysis routines we are going to cover in this course dichotomize the distances based on a critical distance rule:
+
+$$d_{ij} = \begin{cases}
+ & \text{ if } D_{ij}^2 \leqslant h \text{ then  } d_{ij}=1 \\ 
+ & \text{ if } D_{ij}^2 > h \text{ then } d_{ij}=0 
+\end{cases}$$
+
+Which is a simple distance rule, where if the distance between any two points is less than or equal to a *threshold distance* $h$, then the two are considered to be neighbors ($d_{ij}$ = 1), while if any two observations are further apart than $h$, they are not considered to be neighbors. 
+
+
+
+#K nearest neighbors
+
+- A useful way to use distances is to construct a k-nearest neighbors set. 
+
+- This will find the "k" closest observations for each observation, where k is some integer. 
+
+- For instance if we find the k=3 nearest neighbors, then each observation will have 3 neighbors, which are the closest observations to it, *regardless of the distance between them* which is important. 
+
+- Using the k nearest neighbor rule, two observations could potentially be very far apart and still be considered neighbors.
+
+#Measuring Spatial Autocorrelation
+
+- If we observe data Z(s) (an attribute) at location i, and again at location j, then the spatial autocorrelation between $Z(s)_i$ and $Z(s)_j$ is degree of similarity between them, measured as the standardized covariance between their locations and values.
+
+- In the absence of spatial autocorrelation the locations of $Z(s)_i$ and $Z(s)_j$ has nothing to do with the values of $Z(s)_i$ and $Z(s)_j$
+
+- OTOH, if autocorrelation is present, close proximity of $Z(s)_i$ and $Z(s)_j$ leads to similiarity in their attributes.
+
+#Types of autocorrelation
+
+**Positive Autocorrelation**
+- This means that a feature is positively associated with the values of the surrounding area (as defined by the spatial weight matrix), high values occur with high values, and low with low
+
+
+**Negative autocorrelation**
+- This means that a feature is negatively associated with the values of the surrounding area (as defined by the spatial weight matrix), high with low, low with high
+
+#Measures of autocorrelation
+
+- The (probably) most popular global autocorrelation statistic is [Moran's I](http://www.jstor.org/stable/2332142) (1950):
+
+
+- $I = \frac{n}{(n - 1)\sigma^2 w_{..}}  \sum^i_n \sum^j_n w_{ij} (Z(s_i) - \bar Z)(Z(s_j) - \bar Z)$
+
+
+- with $Z(s)_i$ being the value of the attribute at location i,  $Z(s)_j$ being the value of the attribute at location j, $\sigma^2$ is sample variance, $w_{ij}$ is the weight for location *ij* (0 if they are not neighbors, 1 otherwise). 
+
+- Very similar in interpretation ot a Pearson Correlation
+
+#Geary's C
+
+- RC Geary in [1954](http://www.jstor.org/stable/2986645) derived the C statistic 
+
+- $C = \frac{n-1}{2 \sum_{ij} w_{ij}} \frac{\sum_{ij} w_{ij} \left ( x_i - x_j \right )^2 }{\sum_{ij}  \left ( x_i - \bar x \right )^2 }$
+
+- Similar in interpretation to the Moran statistic, C, measures whether values are similar in neighboring areas. 
+
+- C == 1 == No autocorrelation, C< 1 == positive autocorrelation, C > 1 negative autocorrelation
+
+
+#Getis-Ord G
+
+- `"{Too Ugly to Show}"`
+[See the paper](http://onlinelibrary.wiley.com/store/10.1111/j.1538-4632.1992.tb00261.x/asset/j.1538-4632.1992.tb00261.x.pdf?v=1&t=it0w4k1t&s=a164f95f2fd2c46259b70d859f2366f1e8cbae2d)
+
+- Similar to Geary's C in interpretation
+- High values next to high values, and so on
+
+
+#Spatial Lag of a Variable
+
+- If we have a value $Z(s_i)$ at location i and a spatial weight matrix $w_{ij}$ describing the spatial neighborhood around location i, we can find the lagged value of the variable by:
+
+- $WZ_i = Z(s_i) * w_{ij}$
+
+- This calculates what is effectively, the neighborhood average value in locations around location i, often stated $Z(s_{-i})$
+
+----
+
+- Again, if we had the adjacency matrix from above, a *Rook-based* adjacency weight matrix. 
+
+$$
+w_{ij} = \begin{bmatrix}
+0 & 1 & 1 & 0\\ 
+1 & 0 & 0 & 1 \\ 
+1 & 0 &  0& 1\\ 
+ 0&  1& 1 & 0
+\end{bmatrix}
+$$
+
+----
+
+Typically this matrix is standardized, by dividing each element of $w_{ij}$ by the number of neighbors, this is called *row-standardized*:
+
+$$
+w_{ij} = \begin{bmatrix}
+0 & .5 & .5 & 0\\ 
+.5 & 0 & 0 & .5 \\ 
+.5 & 0 &  0& .5\\ 
+ 0&  .5& .5 & 0
+\end{bmatrix}
+$$
+
+----
+
+and a variable z, equal to:
+
+$$z=\begin{bmatrix}
+1 & 2 & 3 & 4
+\end{bmatrix}$$
+
+When we form the product: $z'W$, we get:
+
+$$z_{lag}=\begin{bmatrix}
+2.5 & 2.5 & 2.5 & 2.5
+\end{bmatrix}$$
+
+In R, we can simply do:
+```{r}
+z<-c(1,2,3,4)
+w<-matrix(c(0,.5,.5,0,.5,0,0,.5,.5,0,0,.5,0,.5,.5,0), nrow = 4, byrow = T)
+z
+```
+```{r}
+w
+```
+```{r}
+z%*%w
+```
+
+is the spatially lagged value of z. 
+
+
+
+
+#San Antonio Poverty Rate Map
+
+Here is the overall poverty rate map for San Antonio
+```{r}
+library(classInt)
+sa_acs2%>%
+  mutate(povcut=cut(sa_acs2$ppov,breaks=data.frame(classIntervals(var=sa_acs2$ppov, n=6, style="jenks")[2])[,1], include.lowest = T))%>%
+  ggplot(aes(color=povcut, fill=povcut))+geom_sf()+
+  scale_fill_brewer(palette = "Blues") + 
+  scale_color_brewer(palette = "Blues")
+
+```
+
+###Moran's I Statistic
+One of the most popular global autocorrelation statistic is Moran's I [@Moran1950]
+
+$I = \frac{n}{(n - 1)\sigma^2 w_{..}}  \sum^i_n \sum^j_n w_{ij} (Z(s_i) - \bar Z)(Z(s_j) - \bar Z)$
+
+with $Z(s_i)$ being the value of the variable, the poverty rate for example, at location i,  $Z(s_j)$ being the value of the poverty rate at location j, $\sigma^2$ is sample variance of the poverty rate, $w_{ij}$ is the weight for location *ij* (0 if they are not neighbors, 1 otherwise). 
+
+Moran's I is basically a correlation, *think of Pearson's* $\rho$ *between a variable and a spatially lagged* version of itself. 
+
+
+```{r , message=FALSE, warning=FALSE,results='hide'}
+library(spdep)
+library(RColorBrewer)
+
+#Queen Spatial weight matrix, row standardized
+nbs<-poly2nb(as(sa_acs2,"Spatial"), queen = T)
+nbs
+wts<-nb2listw(neighbours = nbs, style = "W")
+moran.test(sa_acs2$ppov, listw = wts)
+```
+
+
+----
+
+**Moran's I Scatterplot** 
+It is sometimes useful to visualize the relationship between the actual values of a variable and its spatially lagged values. This is the so called **Moran scatterplot**
+
+Lagged values are the average value of the surrounding neighborhood around location i
+
+lag(Z) = $z_{ij} * w_{ij}$ = $z'W$ in matrix terms
+
+The Moran scatterplot shows the association between the value of a variable in a location and its spatial neighborhood's average value. The variables are generally plotted as *z-scores*,to avoid scaling issues. 
+
+And here we show the Moran scatterplot:
+#Moran Scatter plot
+```{r}
+sa_acs2$zpov<-as.numeric(scale(sa_acs2$ppov))
+moran.plot(x = sa_acs2$zpov, listw = wts, labels = F, xlab = "Poverty Rate in Tracts- z score", ylab="Lagged Poverty Rate in Tracts - z score", main="Moran Scatterplot of Income in Bexar County Census Tracts")
+
+```
+
+```{r}
+moran.test(x=sa_acs2$ppov, listw = wts)
+```
+
+#Other autocorrelation measures
+
+```{r}
+geary.test(sa_acs2$ppov, listw = wts)
+
+globalG.test(sa_acs2$ppov, listw = wts)
+
+```
+#Local Autocorrelation Statistics
+
+- So far, we have only seen a *Global* statistic for autocorrelation, and this tells us if there is any *overall* clustering in our data. 
+
+- We may be more interested in *where* the autocorrelation occurs, or where *clusters* are located. 
+
+- A local version of the autocorrelation statistics are avaialble as well. 
+
+- This basically calculates the statistic from above, but only for the *local neighborhood*.
+
+- It compares the observation's value to the local neighborhood average, instead of the global average. Anselin ([1995](http://dces.wisc.edu/wp-content/uploads/sites/30/2013/08/W4_Anselin1995.pdf)) referred to this as a "**LISA**" statistic, for Local Indicator of Spatial Autocorrelation.
+
+----
+
+Here is a LISA map for clusters of poverty in San Antonio:
+
+```{r, echo=F,message=FALSE,results='hide'}
+
+sa_acs2<-as(sa_acs2, "Spatial")
+nbs<-poly2nb(sa_acs2, queen = T)
+wts<-nb2listw(nbs, style = "W")
+sa_acs2$spov<-scale(sa_acs2$ppov)
+sa_acs2$lag_pov<-lag.listw(var=sa_acs2$spov, x = wts)
+locm<-localmoran(x = sa_acs2$ppov, listw = wts)
+sa_acs2$quad_sig <- NA
+sa_acs2@data[(sa_acs2$spov >= 0 & sa_acs2$lag_pov >= 0) & (locm[, 5] <= 0.05), "quad_sig"] <- 1
+sa_acs2@data[(sa_acs2$spov <= 0 & sa_acs2$lag_pov <= 0) & (locm[, 5] <= 0.05), "quad_sig"] <- 2
+sa_acs2@data[(sa_acs2$spov >= 0 & sa_acs2$lag_pov <= 0) & (locm[, 5] <= 0.05), "quad_sig"] <- 3
+#sa_acs2@data[(sa_acs2$spov >= 0 & sa_acs2$lag_pov <= 0) & (locm[, 5] <= 0.05), "quad_sig"] <- 4
+sa_acs2@data[(sa_acs2$spov <= 0 & sa_acs2$lag_pov >= 0) & (locm[, 5] <= 0.05), "quad_sig"] <- 4  #WE ASSIGN A # Set the breaks for the thematic map classes
+breaks <- seq(1, 4, 1)
+
+# Set the corresponding labels for the thematic map classes
+labels <- c("high-High", "low-Low", "High-Low", "Low-High", "Not Signif.")
+
+# see ?findInterval - This is necessary for making a map
+np <- findInterval(sa_acs2$quad_sig, breaks)
+
+# Assign colors to each map class
+colors <- c("red", "blue", "lightpink", "skyblue2", "white")
+
+plot(sa_acs2, col = colors[np])  #colors[np] manually sets the color for each county
+mtext("Local Moran's I - Poverty, Bexar County Texas", cex = 1.5, side = 3, line = 1)
+legend("topleft", legend = labels, fill = colors, bty = "n")
+```
+
+which shows areas of low poverty clustering in blue, and high poverty clustering in red. 
+
+----
+
+- These are so-called *spatial clusters*, becuase they are areas with higher (or lower, for the blues) than average poverty rates, surrounded by areas with with higher than average poverty rates. 
+
+- The red clusters are so called "high-high clusters", likewise the blue areas are called "low-low clusters". 
+
+- We also see light pink and light blue polygons. The light pink polygons represent areas that have high poverty rates, but are in a low poverty spatial neighborhood, and are called high-low outliers. 
+
+
+
+#What these methods tell you
+
+- all of these statistics are _descriptive statistics ONLY_, 
+- It simply indicates if there is spatial association/autocorrelation in a variable
+- Local autocorrelation statistics tell you if there is significant localized clustering of the variable
+
+
+
+

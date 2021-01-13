@@ -1,0 +1,15 @@
+---
+title: "Homework1 example"
+author: "Corey Sparks PhD"
+date: "1/7/2021"
+output: html_document
+---
+
+
+# Corey Sparks
+
+## corey.sparks@utsa.edu
+
+Use a screen capture tool to take a capture of you R session showing version 4.0.3
+
+![myimage](C:/Users/ozd504/OneDrive - University of Texas at San Antonio/classes/dem7283/class_21_7283/hw1.png)

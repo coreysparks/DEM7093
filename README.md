@@ -53,16 +53,16 @@ and I also recommend consulting with this text for information on the tidyverse 
 # Course Calendar
 | **Week** | **Date** | **Topic** | **Suggested Reading**** Numbers refer to numbering of textbooks** |
 | --- | --- | --- | --- |
-| 1 | 1/20 | Class overview, Intro to software and class processes | 1 – ch 12- ch 1 |
+| 1 | 1/20 | Class overview, Intro to software and class processes | 1 – ch 1; 2- ch 1 |
 | 2 | 1/27 | Intro to QGIS | 2- ch 1 |
 | 3 | 2/3 | Geographic data types, Getting data from the web | 1 – ch 32- ch 2 |
-| 4 | 2/10 | Data display and map creation **In Class Lab** | 1- ch 3&amp;42- ch 3 |
+| 4 | 2/10 | Data display and map creation **In Class Lab** | 1- ch 3amp&4 ; 2- ch 3 |
 | 5 | 2/17 | Map projections and measuring distances | 2 – ch 2 |
 | 6 | 2/24 | Data creation and editing **In Class Lab** | 2 - ch 2 |
 | 7 | 3/3 | Geocoding | |
 | 8 | 3/10 | **No Class**** Spring Break** |  |
-| 9 | 3/17 | Point pattern analysis **Blog 1 Due** | 1 – ch 5 &amp;62 ch 5 |
-| 10 | 3/24 | Vector Analysis **In Class Lab** | 1 – ch 52 ch 5 |
+| 9 | 3/17 | Point pattern analysis **Blog 1 Due** | 1 – ch 5 &amp;6 ; 2 ch 5 |
+| 10 | 3/24 | Vector Analysis **In Class Lab** | 1 – ch 5 ; 2 ch 5 |
 | 11 | 3/31 | Raster analysis | 2 ch 5 |
 | 12 | 4/7 | Research Lab Day - No Lecture **Blog 2 DUE** |  |
 | 13 | 4/14 | Basic spatial statistics | 1 ch 7 &amp; 8 |

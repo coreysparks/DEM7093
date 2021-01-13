@@ -42,9 +42,11 @@ There are two recommended books for this course:
 2) Learning QGIS, 4th edition. Packt Publishing (https://www.packtpub.com/big-data-and-business-intelligence/learning-qgis-third-edition)
 
 I would also recommend downloading from the library
+
 3) Applied spatial data analysis with R 2nd edition from Springer Link (accessible through the UTSA library) (https://link.springer.com/book/10.1007%2F978-1-4614-7618-4) 
 
 and I also recommend consulting with this text for information on the tidyverse in R.
+
 4) R for Data Science
 (https://r4ds.had.co.nz/) 
 

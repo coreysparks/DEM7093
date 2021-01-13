@@ -55,8 +55,8 @@ and I also recommend consulting with this text for information on the tidyverse 
 | --- | --- | --- | --- |
 | 1 | 1/20 | Class overview, Intro to software and class processes | 1 – ch 1; 2- ch 1 |
 | 2 | 1/27 | Intro to QGIS | 2- ch 1 |
-| 3 | 2/3 | Geographic data types, Getting data from the web | 1 – ch 32- ch 2 |
-| 4 | 2/10 | Data display and map creation **In Class Lab** | 1- ch 3amp&4 ; 2- ch 3 |
+| 3 | 2/3 | Geographic data types, Getting data from the web | 1 – ch 3; 2- ch 2 |
+| 4 | 2/10 | Data display and map creation **In Class Lab** | 1- ch 3 &amp 4 ; 2- ch 3 |
 | 5 | 2/17 | Map projections and measuring distances | 2 – ch 2 |
 | 6 | 2/24 | Data creation and editing **In Class Lab** | 2 - ch 2 |
 | 7 | 3/3 | Geocoding | |

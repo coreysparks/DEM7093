@@ -57,18 +57,13 @@ and I also recommend consulting with this text for information on the tidyverse 
 | 4 | 2/10 | Data display and map creation **In Class Lab** | 1- ch 3&amp;42- ch 3 |
 | 5 | 2/17 | Map projections and measuring distances | 2 – ch 2 |
 | 6 | 2/24 | Data creation and editing **In Class Lab** | 2 - ch 2 |
-| 7 | 3/3 | Geocoding |
- |
-| 8 | 3/10 | **No Class**** Spring Break** |
- |
+| 7 | 3/3 | Geocoding | |
+| 8 | 3/10 | **No Class**** Spring Break** |  |
 | 9 | 3/17 | Point pattern analysis **Blog 1 Due** | 1 – ch 5 &amp;62 ch 5 |
 | 10 | 3/24 | Vector Analysis **In Class Lab** | 1 – ch 52 ch 5 |
 | 11 | 3/31 | Raster analysis | 2 ch 5 |
-| 12 | 4/7 | Research Lab Day - No Lecture **Blog 2 DUE** |
- |
+| 12 | 4/7 | Research Lab Day - No Lecture **Blog 2 DUE** |  |
 | 13 | 4/14 | Basic spatial statistics | 1 ch 7 &amp; 8 |
 | 14 | 4/21 | Basic spatial statistics **In Class Lab**** Blog 3 DUE** | 1 ch 7 &amp; 8 |
-| 15 | 4/28 | Research Lab Day - No Lecture |
- |
-| 5 | 5/5 | Finals Period **Final Blog Post 4 Due** |
- |
+| 15 | 4/28 | Research Lab Day - No Lecture |  |
+| 5 | 5/5 | Finals Period **Final Blog Post 4 Due** |  |

@@ -1,15 +1,9 @@
 ---
-title: "DEM 7093 Lab 1 using  R - Map projections"
+title: "DEM 5093/7093 Lab 1 using  R - Basic Map making"
 author: "Corey Sparks, Ph.D."
-date: "2/6/2020"
-output:
-   html_document:
-    df_print: paged
-    fig_height: 7
-    fig_width: 7
-    toc: yes
-    includes:
-      in_header: logo.html
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+always_allow_html: yes
 ---
 
 ### Get a Census developer API Key
@@ -24,14 +18,14 @@ one time to install your key for use in `tidycensus`
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, message=FALSE}
+```{r, message=FALSE, eval=TRUE}
 library(tidycensus)
 library(tidyverse)
 library(sf)
 library(ggplot2)
-v15_Profile <- load_variables(2015 , "acs5/profile", cache = TRUE) #demographic profile tables
+v15_Profile <- load_variables(2017 , "acs5/profile", cache = TRUE) #demographic profile tables
 
-View(v15_Profile)
+
 
 #Search for variables by keywords in the label 
 v15_Profile[grep(x = v15_Profile$label, "POVERTY"), c("name", "label")]
@@ -70,7 +64,7 @@ sa_acs2<-sa_acs%>%
 ## Write data out to shapefile
 ```{r, message=FALSE, warning=FALSE, eval=F}
 #change the directory
-sf::st_write(sa_acs2,dsn="C:/Users/ozd504/Google Drive/classes/dem7093/dem7093_20//data",layer="sa_tract_dp03_R", driver="ESRI Shapefile", delete_layer=T, update=T)
+sf::st_write(sa_acs2,dsn="C:/Users/ozd504/OneDrive - University of Texas at San Antonio/classes/gis_classwork",layer="sa_tr_dp03", driver="ESRI Shapefile")
 
 ```
 
@@ -78,7 +72,7 @@ sf::st_write(sa_acs2,dsn="C:/Users/ozd504/Google Drive/classes/dem7093/dem7093_2
 
 ## Some basic mapping of variables
 Here I generate a quantile break for % black in census tracts and compare it to a Jenks break
-```{r, message=FALSE}
+```{r, message=FALSE, fig.width=12, fig.height=8}
 
 library(classInt)
 library(patchwork)
@@ -114,16 +108,35 @@ p2<-ggplot(ppov_map, aes(fill = jpov, color = jpov)) +
   scalebar(ppov_map, location="bottomleft", dist=5, transform = T,dist_unit = "km",  model="WGS84", st.size =2)
 p2
   
-p1/ p2
+p1+ p2
 
 ```
 
 ```{r, eval=FALSE}
-ggsave(filename="~/Google Drive/classes/dem7093/dem7093_20/code/lab1map1.png")
+ggsave(filename="C:/Users/ozd504/OneDrive - University of Texas at San Antonio//classes/gis_classwork/lab1map1.png")
 
 ```
 
-\newpage
+### Slightly easier way using `tmap`
+
+```{r}
+library(tmap)
+library(tmaptools)
+
+tm_shape(sa_acs2)+
+  tm_polygons("ppov", title="% in Poverty", palette="Blues", style="quantile", n=5 ,legend.hist=T)+
+  tm_format("World", title="San Antonio Poverty Estimates - Quantile Breaks", legend.outside=T)+
+  tm_scale_bar()+
+  tm_compass()
+
+tm_shape(sa_acs2)+
+  tm_polygons("ppov", title="% in Poverty", palette="Blues", style="jenks", n=5,legend.hist=T )+
+  tm_format("World", title="San Antonio Poverty Estimates - Jenks Breaks", legend.outside=T)+
+  tm_scale_bar()+
+  tm_compass()
+
+```
+
 
 ## Interactive map with mapview
 
@@ -131,7 +144,7 @@ ggsave(filename="~/Google Drive/classes/dem7093/dem7093_20/code/lab1map1.png")
 library(mapview)
 library(RColorBrewer)
 pal <- colorRampPalette(brewer.pal(6, "Blues")) #set colors
-mapview(ppov_map["jpov"], col.regions=pal, legend=T,map.types="OpenStreetMap", layer.name="% African American")
+mapview(ppov_map["jpov"], col.regions=pal, legend=T,map.types="OpenStreetMap", layer.name="% in Poverty")
 
 
 ```

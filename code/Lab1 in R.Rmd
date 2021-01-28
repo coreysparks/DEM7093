@@ -23,8 +23,11 @@ library(tidycensus)
 library(tidyverse)
 library(sf)
 library(ggplot2)
-v15_Profile <- load_variables(2017 , "acs5/profile", cache = TRUE) #demographic profile tables
+```
 
+```{r}
+v15_Profile <- load_variables(2017 , "acs5/profile", cache = TRUE) #demographic profile tables
+View(v15_Profile)
 
 
 #Search for variables by keywords in the label 
@@ -46,8 +49,7 @@ sa_acs<-get_acs(geography = "tract",
                 state="TX",
                 county = c("Bexar"),
                 year = 2017,
-                variables=c( "DP05_0001E", 
-                            "DP03_0119PE") ,
+                variables=c( "DP05_0001E", "DP03_0119PE") ,
                 geometry = T, output = "wide")
 
 #create a county FIPS code - 5 digit
@@ -124,7 +126,7 @@ library(tmap)
 library(tmaptools)
 
 tm_shape(sa_acs2)+
-  tm_polygons("ppov", title="% in Poverty", palette="Blues", style="quantile", n=5 ,legend.hist=T)+
+  tm_polygons("ppov", title="% in Poverty", palette="Blues", style="quantile", n=5 )+
   tm_format("World", title="San Antonio Poverty Estimates - Quantile Breaks", legend.outside=T)+
   tm_scale_bar()+
   tm_compass()
@@ -143,8 +145,9 @@ tm_shape(sa_acs2)+
 ```{r}
 library(mapview)
 library(RColorBrewer)
-pal <- colorRampPalette(brewer.pal(6, "Blues")) #set colors
-mapview(ppov_map["jpov"], col.regions=pal, legend=T,map.types="OpenStreetMap", layer.name="% in Poverty")
+ppov_map$jpov<-relevel(ppov_map$jpov,ref = "[0,10]" )
+pal <- colorRampPalette(brewer.pal(7, "Blues")) #set colors
+mapview(ppov_map, zcol="jpov",  legend=T,map.types="OpenStreetMap", layer.name="% in Poverty")
 
 
 ```

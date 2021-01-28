@@ -86,8 +86,8 @@ ppov_map<-sa_acs2 %>%
 
 library(ggsn)
 
-p1<-ggplot(ppov_map, aes(fill = cpov, color = cpov)) + 
-  geom_sf() + 
+p1<-ggplot(ppov_map, aes(fill = cpov)) + 
+  geom_sf(color="grey50") + 
   ggtitle("Proportion in poverty", 
           subtitle = "Bexar County Texas, 2017 - Quantile Breaks")+
     scale_fill_brewer(palette = "Reds") + 
@@ -99,8 +99,8 @@ p1
 
 
 
-p2<-ggplot(ppov_map, aes(fill = jpov, color = jpov)) + 
-  geom_sf() + 
+p2<-ggplot(ppov_map, aes(fill = jpov)) + 
+  geom_sf(color="grey50") + 
   ggtitle("Proportion in Poverty", 
           subtitle = "Bexar County Texas, 2017 - Jenks Breaks")+
   scale_fill_brewer(palette = "Reds") + 

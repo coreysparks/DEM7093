@@ -1,15 +1,12 @@
 ---
 title: "DEM 5093/7093 Lab 2 using R - Map projections and transformations"
 author: "Corey Sparks, Ph.D."
-date: "2/13/2020"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
    html_document:
-    df_print: paged
-    fig_height: 7
-    fig_width: 7
-    toc: yes
-    includes:
-      in_header: logo.html
+   toc: yes
+   toc_float: yes
+always_allow_html: yes
 ---
 
 This lab complements the [exercise using Qgis for today ](https://docs.google.com/document/d/e/2PACX-1vQVSD4MKW4rTSQaNlM1cOULh-0-rSpoAaU3N_Xe7elujIj-ELgWTIGVDygF8qKl3QVBtpxPSi7YuDOS/pub)
@@ -56,21 +53,14 @@ st_crs(sa_acs2)
 
 ### create basic map
 ```{r}
-ppov_map<-sa_acs2 %>%
-  mutate(cpov=cut(ppov,breaks = quantile(ppov, na.rm=T, p=seq(0,1,length.out = 6)),include.lowest = T))
+library(tmap)
+library(tmaptools)
 
-library(ggsn)
-
-p1<-ggplot(ppov_map, aes(fill = cpov, color = cpov)) + 
-  geom_sf() + 
-  ggtitle("Proportion in poverty", 
-          subtitle = "Bexar County Texas, 2017 - Quantile Breaks")+
-    scale_fill_brewer(palette = "Reds") + 
-  scale_color_brewer(palette = "Reds")+
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
-  north(ppov_map)+
-  scalebar(ppov_map, location="bottomleft", dist=5, transform = T,dist_unit = "km",  model="WGS84", st.size =2 )
-p1
+tm_shape(sa_acs2)+
+  tm_polygons("ppov", title="% in Poverty", palette="Blues", style="quantile", n=5 )+
+  tm_format("World", title="San Antonio Poverty Estimates - Quantile Breaks", legend.outside=T)+
+  tm_scale_bar()+
+  tm_compass()
 
 
 ```
@@ -93,27 +83,41 @@ st_distance(tr_co)
 ```
 
 
-# This part doesn't work yet
-```{r, eval = FALSE}
-library(RQGIS3)
+# Using QGIS within R
+This is another way to do the above task, by running a QGIS algorithm within R using the `qgisprocess` package. 
 
-menv<-set_env()
+See the vignette [here](https://github.com/paleolimbot/qgisprocess) for more on what this package is and some examples.
 
-#open_app()
+```{r}
+library(qgisprocess) #load the package
 
-find_algorithms(search_term="d
-                istance", name_only=T)
-get_usage(alg = "qgis:distancematrix")
-params = get_args_man(alg = "native:centroids")
-params
+qgis_configure() #set up qgis - find the executable
 
-out = run_qgis(alg = "qgis:distancematrix",
-               INPUT = tr_co[, 1],
-               INPUT_FIELD = tr_co$GEOID,
-               TARGET = tr_co,
-               TARGET_FIELD = tr_co$GEOID,
+# qgis_algorithms() lists all the available routines in QGIS
+head(qgis_algorithms())
+
+```
+
+We can use `grep` to search for specific terms in the algorithms. 
+
+```{r}
+algs<-qgis_algorithms()
+
+algs[grep(x = algs$algorithm, "distance"),"algorithm"]
+
+qgis_show_help("qgis:distancematrix")
+```
+
+```{r}
+out = qgis_run_algorithm(alg = "qgis:distancematrix",
+               INPUT = tr_co[1,],
+               INPUT_FIELD = "GEOID", 
+               TARGET = tr_co[2,],
+               TARGET_FIELD = "GEOID",
                MATRIX_TYPE = 0, 
-               NEAREST_POINTS = 1,
-              load_output = TRUE, qgis_env = menv)
+               NEAREST_POINTS = 1)
+
+output_sf <- sf::read_sf(qgis_output(out, "OUTPUT"))
+output_sf$Distance
 
 ```

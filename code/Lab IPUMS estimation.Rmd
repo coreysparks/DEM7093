@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(ipumsr)
-ddi <- read_ipums_ddi("/media/corey/extra/gis_classwork/usa_00083.xml")
+ddi <- read_ipums_ddi("~/OneDrive - University of Texas at San Antonio/classes//gis_classwork/usa_00083.xml")
 data <- read_ipums_micro(ddi)
 data<-haven::zap_labels(data)
 
@@ -41,6 +41,7 @@ library(mapview)
 options(tigris_class = "sf")
 pumas<-pumas(state = "TX", year = 2018, cb = T)
 plot(pumas["GEOID10"], main = "Public Use Microdata Areas in Texas")
+mapview(pumas)
 ```
 
 ```{r}

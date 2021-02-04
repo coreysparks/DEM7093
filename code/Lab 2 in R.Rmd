@@ -41,6 +41,9 @@ sa_acs2<-sa_acs%>%
   na.omit()
 
 
+# mydat<-sf::st_read("~/OneDrive - University of Texas at San Antonio/classes/gis_classwork/bexarpolygon.shp")
+# plot(mydat)
+
 ```
 
 ### find coordinate system of current map

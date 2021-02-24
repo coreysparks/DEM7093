@@ -69,6 +69,34 @@ pov10 <- pov10%>%
 head(pov10)
 
 ```
+## Alternative break strategies
+
+```{r}
+
+
+tm_shape(pov10)+
+  tm_polygons(c("ppov"), title=c("% in Poverty"), palette="Blues", style="quantile", n=5)+
+  #tm_format("World", legend.outside=T, title.size =4)+
+  tm_scale_bar()+
+  tm_layout(title="San Antonio Poverty Rate Estimates - Quantile Breaks", title.size =1.5, legend.frame = TRUE, title.position = c('right', 'top'))+
+  tm_compass()
+
+tm_shape(pov10)+
+  tm_polygons(c("ppov"), title=c("% in Poverty"), palette="Blues", style="pretty", n=5)+
+  #tm_format("World", legend.outside=T, title.size =4)+
+  tm_scale_bar()+
+  tm_layout(title="San Antonio Poverty Rate Estimates - Pretty Breaks", title.size =1.5, legend.frame = TRUE, title.position = c('right', 'top'))+
+  tm_compass()
+
+
+tm_shape(pov10)+
+  tm_polygons(c("ppov"), title=c("% in Poverty"), palette="Blues", style="jenks", n=5)+
+  #tm_format("World", legend.outside=T, title.size =4)+
+  tm_scale_bar()+
+  tm_layout(title="San Antonio Poverty Rate Estimates - Jenks Breaks", title.size =1.5, legend.frame = TRUE, title.position = c('right', 'top'))+
+  tm_compass()
+
+```
 
 
 ## Mapping of errors in estimates

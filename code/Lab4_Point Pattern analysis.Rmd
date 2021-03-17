@@ -39,11 +39,20 @@ results<-cxy_geocode(addr,
                      output = "simple")
 results.proj<-st_transform(results,
                            crs = 2278)
+
+```
+####  OR just use the lat / long information in the data!
+```{r}
+addr<-read.csv(url("https://raw.githubusercontent.com/coreysparks/data/master/wic_west_side.csv"))
+results <- st_as_sf(addr, coords=c("Longitude", "Latitude"), crs=4269,agr="constant")
+results.proj<-st_transform(results,
+                           crs = 2278)
+
 ```
 
 
 ```{r}
-mapview(results)
+mapview(results.proj)
 ```
 
 
@@ -106,7 +115,7 @@ qgis_show_help("qgis:heatmapkerneldensityestimation")
 ```
 
 Run the algorithm
-```{r, message=FALSE, warning=FALSE, results='hide'}
+```{r, message=FALSE, warning=FALSE}
 wic_dens<-qgis_run_algorithm(algorithm ="qgis:heatmapkerneldensityestimation",
          INPUT=results.proj,
          RADIUS = 5000,

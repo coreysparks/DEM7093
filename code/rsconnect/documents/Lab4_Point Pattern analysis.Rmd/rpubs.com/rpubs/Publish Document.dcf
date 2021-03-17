@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/740670/071648d5bd6c464089628ce7b205b21b
+bundleId: https://api.rpubs.com/api/v1/document/740670/071648d5bd6c464089628ce7b205b21b
+url: http://rpubs.com/corey_sparks/740670
+when: 1616003304.84906

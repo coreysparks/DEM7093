@@ -1,0 +1,330 @@
+---
+title: "Intro to Point Pattern Analysis using R and QGIS"
+author: "Corey Sparks, Ph.D."
+date: "March 17, 2021"
+always_allow_html: yes
+output:
+   html_document:
+    df_print: paged
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    toc_float: yes
+---
+
+This example shows how to use R and QGIS from within R to perform a series of common point pattern analysis techniques. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(mapview)
+library(sf)
+library(censusxy)
+library(dplyr)
+```
+
+```{r}
+addr<-read.csv(url("https://raw.githubusercontent.com/coreysparks/data/master/wic_west_side.csv"))
+addr<-addr[c(6, 12:14)]
+names(addr)<-c("street", "city", "st", "zip")
+head(addr)
+
+results<-cxy_geocode(addr,
+                     street = "street",
+                     city = "city",
+                     state ="st",
+                     zip = "zip",
+                     class="sf",
+                     output = "simple")
+results.proj<-st_transform(results,
+                           crs = 2278)
+
+```
+####  OR just use the lat / long information in the data!
+```{r}
+addr<-read.csv(url("https://raw.githubusercontent.com/coreysparks/data/master/wic_west_side.csv"))
+results <- st_as_sf(addr, coords=c("Longitude", "Latitude"), crs=4269,agr="constant")
+results.proj<-st_transform(results,
+                           crs = 2278)
+
+```
+
+```{r}
+register_google(key = "AIzaSyDc1AToni0fXtPNxrqsstHHZRKWYnPk3Ro", write=T)
+```
+
+
+```{r}
+mv1= mapview(results.proj)
+mapshot(mv1, file = paste0(getwd(), "/map1.png"))
+
+library(tmap)
+library(tmaptools)
+library(OpenStreetMap)
+bg<-  read_osm(results.proj, ext=1.1)
+
+tmap_mode("plot")
+tm_basemap("OpenStreetMap.Mapnik")+
+  tm_shape(results.proj)+
+  tm_dots()
+
+library(ggplot2)
+library(ggmap)
+library(ggspatial)
+
+sa_map <- get_map( c(-98.5,29.43 ), zoom = 13)
+ggmap(sa_map)
+
+ggmap(sa_map) +geom_sf(data=results.proj, aes(Primary.SIC)) +coord_sf(crs = st_crs(4269))
+
+res<-st_transform(results.proj, 4326)
+
+library(leaflet)
+leaflet() %>%
+  addTiles()%>%
+  addMarkers(lng = addr$Longitude, lat= addr$Latitude)
+
+```
+
+
+
+# mean feature - average of coordinates
+
+```{r}
+mean_feature<-apply(st_coordinates(results.proj), MARGIN = 2, FUN = mean)
+mean_feature<-data.frame(place="meanfeature", x=mean_feature[1], y= mean_feature[2])
+mean_feature<-st_as_sf(mean_feature, coords = c("x", "y"), crs= 2278)
+
+
+tmap_mode("view")
+tm_basemap("OpenStreetMap.Mapnik")+
+  tm_shape(results.proj, size = .2)+
+  tm_dots(col = "green")+
+  tm_shape(mean_feature)+
+  tm_dots(col = "red", size = .2)
+
+
+```
+
+
+
+
+## Central feature - Median of coordinates
+```{r}
+median_feature<-apply(st_coordinates(results.proj), MARGIN = 2, FUN = median)
+median_feature<-data.frame(place="medianfeature", x=median_feature[1], y= median_feature[2])
+median_feature<-st_as_sf(median_feature, coords = c("x", "y"), crs= 2278)
+
+
+tmap_mode("plot")
+tm_basemap("OpenStreetMap.Mapnik")+
+  tm_shape(results.proj)+
+  tm_dots(col = "green", size = .2)+
+  tm_shape(mean_feature)+
+  tm_dots(col = "red", size=.2)+
+  tm_shape(median_feature)+
+  tm_dots(col = "blue", size = .2)
+
+```
+
+
+
+## Buffer points
+```{r}
+wicbuff<- st_buffer(results.proj, dist = 2500)
+
+tmap_mode("plot")
+tm_basemap("OpenStreetMap.Mapnik" )+
+  tm_shape(results.proj, is.master = T)+
+  tm_dots(col = "green")+
+  tm_shape(wicbuff)+
+  tm_polygons(col = "red", alpha = .1)
+
+
+```
+
+
+## Convex hull plot
+```{r}
+chull <- st_convex_hull(st_union(results))
+
+tmap_mode("plot")
+tm_basemap("OpenStreetMap.Mapnik")+
+  tm_shape(results.proj)+
+  tm_dots(col = "green")+
+  tm_shape(chull)+
+  tm_polygons(col = "grey", alpha = .5)
+
+```
+
+
+## kernel density  - You need projected data for this to work right
+R can do kernel density maps, but using simple features it's kind of complicated. I will use Qgis through R instead using the `qgisprocess` [package](https://github.com/paleolimbot/qgisprocess)
+
+```{r}
+library(qgisprocess)
+qgis_configure()
+
+```
+To use this, we need to find the name of the Qgis algorithm we want. `qgis_algorithms()` can return all available algorithms, then we can either filter it with `View()` or use grep to search for one. 
+
+```{r}
+
+algs<-qgis_algorithms()
+algs[grepl(pattern = "density", x = algs$algorithm ),]
+qgis_show_help("qgis:heatmapkerneldensityestimation")
+
+
+```
+
+Run the algorithm
+```{r, message=FALSE, warning=FALSE}
+wic_dens<-qgis_run_algorithm(algorithm ="qgis:heatmapkerneldensityestimation",
+         INPUT=results.proj,
+         RADIUS = 5000,
+         PIXEL_SIZE = 100,
+         KERNEL = 0,
+         OUTPUT=file.path(getwd(), "wicdenst.TIF"),
+         load_output = TRUE)
+library(raster)
+library(RColorBrewer)
+
+result<- qgis_as_raster(wic_dens)
+
+projection(result)<-crs(results.proj)
+
+tmap_mode("plot")
+tm_basemap("OpenStreetMap.Mapnik")+
+  tm_shape(result)+
+  tm_raster()+
+  tm_shape(results.proj, is.master = T)+
+  tm_dots(col="red")
+  
+
+```
+
+
+## Spatial join
+A spatial join can combine attributes of one layer with another layer. Here I combine census variables with the WIC clinic points.
+
+```{r, results="hide"}
+library(tidycensus)
+library(dplyr)
+#load census tract data
+sa_acs<-get_acs(geography = "tract",
+                state="TX",
+                county = "Bexar", 
+                year = 2019,
+                variables=c( "DP05_0001E", "DP03_0009P", "DP03_0062E", "DP03_0119PE",
+                           "DP05_0001E","DP02_0009PE","DP02_0008PE","DP02_0040E","DP02_0038E",
+                            "DP02_0066PE","DP02_0067PE","DP02_0080PE","DP02_0092PE",
+                        "DP03_0005PE","DP03_0028PE","DP03_0062E","DP03_0099PE","DP03_0101PE",
+                            "DP03_0119PE","DP04_0046PE","DP05_0072PE","DP05_0073PE",
+                            "DP05_0066PE", "DP05_0072PE", "DP02_0113PE") ,
+                geometry = T, output = "wide")
+
+#rename variables and filter missing cases
+sa_acs2<-sa_acs%>%
+  mutate(totpop= DP05_0001E, pwhite=DP05_0072PE, 
+         pblack=DP05_0073PE , phisp=DP05_0066PE,
+         phsormore=DP02_0066PE,punemp=DP03_0009PE, medhhinc=DP03_0062E,
+         ppov=DP03_0119PE)%>%
+  dplyr::select(GEOID, totpop, pblack, pwhite, phisp, punemp, medhhinc, ppov)
+
+sa_acs2<-st_transform(sa_acs2, crs = 2278)
+sa_trol<-st_cast(sa_acs2, "MULTILINESTRING")
+```
+
+```{r}
+spjoin<-st_join(results.proj, sa_acs2)
+#head(spjoin)
+
+tmap_mode("plot")
+tm_basemap("OpenStreetMap.Mapnik")+
+  tm_shape(spjoin, is.master = T)+
+  tm_dots("punemp", size = .1)+
+  tm_shape(sa_acs2)+
+  tm_polygons(alpha = .1)
+
+
+```
+
+
+## Count points in polygons
+Point in polygon operations are actually a spatial intersection (more on this next week!) where we see how many points fall within a given polygon. 
+
+```{r}
+sa_acs2$nwic<- lengths(st_intersects(sa_acs2, results.proj))
+
+
+tmap_mode("plot")
+m<-tm_basemap("OpenStreetMap.Mapnik")+
+  tm_shape(sa_acs2)+
+  tm_polygons("nwic")+
+  tm_shape(spjoin, is.master = T)+
+  tm_dots( size = .01)
+
+m
+```
+
+
+
+## Thiessen/Voronoi Polygons
+Thiessen or Voronoi polygons are a process where we can convert points into polygons.
+
+```{r}
+algs[grepl(pattern = "voronoi", x = algs$algorithm ),]
+qgis_show_help("qgis:voronoipolygons")
+```
+```{r, message=FALSE, warning=FALSE, results='hide'}
+
+
+wic_von<-qgis_run_algorithm(alg="qgis:voronoipolygons",
+         INPUT=results.proj,
+         OUTPUT=file.path(tempdir(), "wicvon.shp"),
+         load_output = TRUE)
+
+wic_von<-sf::read_sf(qgis_output(wic_von, "OUTPUT"))
+
+tmap_mode("view")
+map1<-tm_basemap("OpenStreetMap.Mapnik")+
+  tm_shape(wic_von)+
+  tm_polygons(col="grey")+
+  tm_shape(results.proj)+
+  tm_dots( size = .01)
+ 
+ current.mode <- tmap_mode("plot")
+
+# plot map
+map1
+```
+
+
+## Nearest Neighbor analysis
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+library(spatstat)
+wic.pp<-as.ppp(as(results.proj, "Spatial"))
+
+plot(nearest.neighbour(wic.pp))
+```
+
+```{r}
+algs[grepl(pattern = "nearest", x = algs$algorithm ),]
+qgis_show_help("native:nearestneighbouranalysis")
+```
+
+
+
+```{r}
+
+
+wic_nn<-qgis_run_algorithm(alg="native:nearestneighbouranalysis",
+         INPUT=results.proj,
+        OUTPUT_HTML_FILE=file.path(tempdir(), "wicnn.html"),
+         load_output = TRUE)
+
+
+```

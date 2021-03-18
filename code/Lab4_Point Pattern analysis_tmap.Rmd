@@ -51,10 +51,6 @@ results.proj<-st_transform(results,
 
 ```
 
-```{r}
-register_google(key = "AIzaSyDc1AToni0fXtPNxrqsstHHZRKWYnPk3Ro", write=T)
-```
-
 
 ```{r}
 mv1= mapview(results.proj)

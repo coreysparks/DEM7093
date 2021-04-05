@@ -196,9 +196,19 @@ names(lsbrick)
 
 ```{r}
 ndvi<-(lsbrick[[5]] - lsbrick[[4]]) / (lsbrick[[5]] + lsbrick[[4]])
-plot(ndvi,
-     main = "NDVI around San Antonio",
-     axes = FALSE, box = FALSE)       
+
+# plot(ndvi,
+#      main = "NDVI around San Antonio",
+#      axes = FALSE, box = FALSE)       
+library(tmaptools)
+tm_shape(ndvi)+
+  tm_raster(style="quantile", n=5,legend.hist=T,palette =get_brewer_pal("RdYlGn", n = 5) )+
+  tm_format("World",
+            title="San Antonio Shannon Diversity of Land Area",
+            legend.outside=TRUE )+
+  tm_polygons(satract)
+
+
 hist(ndvi)
 ```
 

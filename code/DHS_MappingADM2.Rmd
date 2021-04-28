@@ -1,0 +1,103 @@
+---
+title: "Mapping DHS Survey Estimates to ADM Level 2 Geographies"
+author: "Corey Sparks PhD"
+date: "4/14/2021"
+output: html_document
+---
+
+In this brief example, I show how to use the GPS coordinates from the [Demographic and Health Survey data]() and merge them to the ADM2 subnational geographic level for the country of Ethopia. Then I produce estimates using the DHS data for ADM 2 regions of the country.
+
+This is possible by useing the GIS capacity of the `sf` package to spatially intersect the DHS points and the ADM 2 polygons. 
+
+```{r}
+library(sf)
+library(mapview)
+```
+
+## Read in dhs points
+```{r}
+ethpoly <- st_read(dsn = "~/OneDrive - University of Texas at San Antonio//students/fikre/spatial_epi/ETH_adm2.shp")
+
+ethpoly$struct <- 1:dim(ethpoly)[1]
+
+plot(ethpoly["struct"])
+
+```
+
+
+## Read in dhs sample locations and ADM 2 regions.
+
+The adm2 shapefile can be found in the [Diva GIS international data repository](https://www.diva-gis.org/gdata), or from the [IPUMS International site](https://international.ipums.org/international/gis_harmonized_2nd.shtml) below I use the ADM2 level of administrative geography. 
+
+These locations are not identified in the DHS, but by performing a spatial intersection, we can merge the DHS survey locations to the ADM 2 units
+
+
+
+```{r}
+eth_dots<-st_read("~/OneDrive - University of Texas at San Antonio//students//fikre/ethiopia_dhs/ETGE52FL/ETGE52FL.shp")
+eth_dots <- eth_dots[eth_dots$LATNUM>0,]
+```
+
+```{r}
+eth_adm2<-st_read("~/OneDrive - University of Texas at San Antonio//students//fikre/spatial_epi/ETH_adm2.shp")
+```
+
+```{r}
+#merge dots to administrative data
+eth_dots2000<-st_intersection(eth_dots, eth_adm2)
+
+mapview(eth_dots["DHSCLUST"])+mapview(eth_adm2["NAME_2"])
+```
+
+## Read in DHS survey and recode stunting outcome
+
+Next, I use the DHS survey data to estimate the prevalence of stunting in the ADM 2 regions.
+
+
+```{r}
+library(haven)
+dhs2000<-read_dta("~/OneDrive - University of Texas at San Antonio//students//fikre/ethiopia_dhs/ETKR41DT/ETKR41FL.DTA")
+dhs2000<-zap_labels(dhs2000)
+
+library(car)
+dhs2000$stunting<-ifelse(dhs2000$hw5/100<=-2&dhs2000$hw5/100!=-2,1,0)
+#dhs2000$sex<-dhs2000$hc27
+
+library(dplyr)
+dhs2000<-dhs2000%>%
+  mutate(wt = v005/1000000)%>%
+  filter(complete.cases(stunting))%>%
+  select(v001,stunting, wt, v021, v022)
+```
+
+## Merge survey data to sample locations
+
+```{r}
+dhs2000m<-merge(dhs2000, eth_dots2000, by.x="v001", by.y="DHSCLUST")
+
+```
+
+
+## Create survey estimates for new regions after spatial intersection
+
+```{r}
+library(survey)
+options(survey.lonely.psu = "adjust")
+des<-svydesign(ids = ~v021, strata = ~v022, weights = ~wt, data=dhs2000m)
+names(dhs2000m)
+est.stunt <- svyby(~stunting, ~ID_2, des, FUN=svymean, na.rm=T)
+
+head(est.stunt)
+
+```
+
+## merge estimates to map and map stunting prevalence
+
+```{r}
+library(tigris)
+library(mapview)
+mdat<- geo_join(ethpoly, est.stunt, "ID_2","ID_2")
+mapview(mdat["stunting"])
+
+
+```

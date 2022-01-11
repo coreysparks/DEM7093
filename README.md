@@ -1,7 +1,7 @@
-# DEM7093
+# DEM 5093/7093
 Geographic Information Systems for Population Science
 Demography 5093/7093
-Spring 2021
+Spring 2022
 
 ## Course Information
 Wednesdays 6 - 8:15 PM
@@ -13,12 +13,12 @@ corey.sparks@utsa.edu
 This course is designed to give graduate students interested in social science, population science and policy fields a hands-on introduction to the use of Geographic Information Systems.  The course will cover geographic data types, spatial data creation and management, exploratory spatial statistical analysis, and the basics of geospatial analysis.  At the close of the course, students will be able to use R and QGIS to create and modify geographic data, perform descriptive analysis of spatial data and integrate and map data from various sources into the GIS environment.  
 
 ### Computer skills:
-We will be using R version (4.0.3) and Quantum GIS (QGIS) version 3.10 for this course.  QGIS is open source and free and can be downloaded for windows or mac (OSX > 10.13) from here:
+We will be using R version (4.1) and Quantum GIS (QGIS) version 3.15 for this course.  QGIS is open source and free and can be downloaded for windows or mac (OSX > 10.13) from here:
 https://qgis.org/en/site/forusers/download.html 
 
 We will also be using R. R is the language in which most research statisticians work and current methodological developments are being made, it is also free and can be used on any operating system. 
 
-Please update your R version (4.0.3) to the latest release and update all your packages.
+Please update your R version (4.1) to the latest release and update all your packages.
 We will use R through Rstudio (https://www.rstudio.com/products/rstudio/download/) and we will use Rpubs for turning in all assignments.
 ### RTools
 You should also install the version 4.0 install of Rtools if you are a windows user.
@@ -53,19 +53,19 @@ and I also recommend consulting with this text for information on the tidyverse 
 # Course Calendar
 | **Week** | **Date** | **Topic** | **Suggested Reading**** Numbers refer to numbering of textbooks** |
 | --- | --- | --- | --- |
-| 1 | 1/20 | Class overview, Intro to software and class processes | 1 – ch 1; 2- ch 1 |
-| 2 | 1/27 | Intro to QGIS | 2- ch 1 |
-| 3 | 2/3 | Geographic data types, Getting data from the web | 1 – ch 3; 2- ch 2 |
-| 4 | 2/10 | Data display and map creation **In Class Lab** | 1- ch 3 &amp; 4 ; 2- ch 3 |
-| 5 | 2/17 | Map projections and measuring distances | 2 – ch 2 |
-| 6 | 2/24 | Data creation and editing **In Class Lab** | 2 - ch 2 |
-| 7 | 3/3 | Geocoding | |
-| 8 | 3/10 | **No Class**** Spring Break** |  |
-| 9 | 3/17 | Point pattern analysis **Blog 1 Due** | 1 – ch 5 &amp;6 ; 2 ch 5 |
-| 10 | 3/24 | Vector Analysis **In Class Lab** | 1 – ch 5 ; 2 ch 5 |
-| 11 | 3/31 | Raster analysis | 2 ch 5 |
-| 12 | 4/7 | Research Lab Day - No Lecture **Blog 2 DUE** |  |
-| 13 | 4/14 | Basic spatial statistics | 1 ch 7 &amp; 8 |
-| 14 | 4/21 | Basic spatial statistics **In Class Lab**** Blog 3 DUE** | 1 ch 7 &amp; 8 |
-| 15 | 4/28 | Research Lab Day - No Lecture |  |
-| 5 | 5/5 | Finals Period **Final Blog Post 4 Due** |  |
+| 1 | 1/19 | Class overview, Intro to software and class processes | 1 – ch 1; 2- ch 1 |
+| 2 | 1/26 | Intro to QGIS | 2- ch 1 |
+| 3 | 2/2 | Geographic data types, Getting data from the web | 1 – ch 3; 2- ch 2 |
+| 4 | 2/9 | Data display and map creation **In Class Lab** | 1- ch 3 &amp; 4 ; 2- ch 3 |
+| 5 | 2/16 | Map projections and measuring distances | 2 – ch 2 |
+| 6 | 2/23 | Data creation and editing **In Class Lab** | 2 - ch 2 |
+| 7 | 3/2 | Geocoding | |
+| 8 | 3/9 | Point pattern analysis **Blog 1 Due**  |1 – ch 5 &amp;6 ; 2 ch 5  |
+| 9 | 3/16 |**No Class** **Spring Break**  |  |
+| 10 | 3/23 | Vector Analysis **In Class Lab** | 1 – ch 5 ; 2 ch 5 |
+| 11 | 3/30 | Raster analysis | 2 ch 5 |
+| 12 | 4/6 | Research Lab Day - No Lecture **Blog 2 DUE** |  |
+| 13 | 4/13 | Basic spatial statistics | 1 ch 7 &amp; 8 |
+| 14 | 4/20 | Basic spatial statistics **In Class Lab** **Blog 3 DUE** | 1 ch 7 &amp; 8 |
+| 15 | 4/27 | Research Lab Day - No Lecture |  |
+| 5 | 5/4 | Finals Period **Final Blog Post 4 Due** |  |

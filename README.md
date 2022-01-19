@@ -13,7 +13,7 @@ corey.sparks@utsa.edu
 This course is designed to give graduate students interested in social science, population science and policy fields a hands-on introduction to the use of Geographic Information Systems.  The course will cover geographic data types, spatial data creation and management, exploratory spatial statistical analysis, and the basics of geospatial analysis.  At the close of the course, students will be able to use R and QGIS to create and modify geographic data, perform descriptive analysis of spatial data and integrate and map data from various sources into the GIS environment.  
 
 ### Computer skills:
-We will be using R version (4.1) and Quantum GIS (QGIS) version 3.15 for this course.  QGIS is open source and free and can be downloaded for windows or mac (OSX > 10.13) from here:
+We will be using R version (4.1) and Quantum GIS (QGIS) version 3.16 for this course.  QGIS is open source and free and can be downloaded for windows or mac (OSX > 10.13) from here:
 https://qgis.org/en/site/forusers/download.html 
 
 We will also be using R. R is the language in which most research statisticians work and current methodological developments are being made, it is also free and can be used on any operating system. 

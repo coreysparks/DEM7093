@@ -7,133 +7,195 @@ always_allow_html: yes
 ---
 
 ### Get a Census developer API Key
-Obtain one at http://api.census.gov/data/key_signup.html
+Obtain one at the Census Developer [website](http://api.census.gov/data/key_signup.html)
 
 ### Save your API key to your working directory
 use `tidycensus::census_api_key(key =  "yourkeyhere", install = T)`
 
-one time to install your key for use in `tidycensus`
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+One time to install your key for use in `tidycensus`
 
 ```{r, message=FALSE, eval=TRUE}
 library(tidycensus)
 library(tidyverse)
 library(sf)
 library(ggplot2)
+library(classInt)
+```
+
+
+### Examine data profile tables
+The `load_variables()` function will load all available variables in the ACS for a given year
+```{r}
+v15_Profile <- load_variables(year = 2017 ,
+                              dataset =  "acs5/profile",
+                              cache = TRUE)
+
+
+```
+
+Calling `View(v15_Profile)` will let you interactively browse and filter the ACS variables, this is one way to search for what you're looking for.
+
+
+### Search for variables by keywords in the label 
+```{r}
+v15_Profile%>%
+  filter(grepl(pattern = "POVERTY", x = label))%>%
+  select(name, label)
 ```
 
 ```{r}
-v15_Profile <- load_variables(2017 , "acs5/profile", cache = TRUE) #demographic profile tables
-View(v15_Profile)
+v15_Profile%>%
+  filter(grepl(pattern = "Built 2000 to 2009", x = label))%>%
+  select(name, label)
 
-
-#Search for variables by keywords in the label 
-v15_Profile[grep(x = v15_Profile$label, "POVERTY"), c("name", "label")]
-v15_Profile[grep(x = v15_Profile$label, "Built 2000 to 2009"), c("name", "label")]
 ```
 
 \newpage
 ## Extract from ACS summary file data
 
+The `tidycensus` package has a function `get_acs()` that will download data from the Census API for you automatically **assuming you've installed your key from above** 
+
 Here I get data profile variables from 2017 for Bexar County, TX Census Tracts
 
-The data profile tables are very useful because they contain lots of pre-calculated variables.
 
-Here is a query where we extract several variables from tehe 2017 ACS for Bexar County, Texas. We can also get the spatial data by requesting `geometry=TRUE`.  Useing `output="wide"` will put each variable in a column of the data set, with each row being a census tract. 
+Here is a query where we extract several variables from the 2017 ACS for Bexar County, Texas. We can also get the spatial data by requesting `geometry=TRUE`. 
+
+Using `output="wide"` will put each variable in a column of the data set, with each row being a census tract. 
 
 ```{r, results='hide'}
 sa_acs<-get_acs(geography = "tract",
                 state="TX",
-                county = c("Bexar"),
+                county = "Bexar",
                 year = 2017,
-                variables=c( "DP05_0001E", "DP03_0119PE") ,
-                geometry = T, output = "wide")
+                variables=c("DP05_0001E", "DP03_0119PE") ,
+                geometry = T,
+                output = "wide")
 
-#create a county FIPS code - 5 digit
+head(sa_acs)
+```
+
+Here, I create some other variables that we may need later
+```{r}
+# create a county FIPS code - 5 digit
 sa_acs$county<-substr(sa_acs$GEOID, 1, 5)
 
-#rename variables and filter missing cases
+# rename variables and filter missing cases
 sa_acs2<-sa_acs%>%
-  mutate(totpop= DP05_0001E, ppov=DP03_0119PE) %>%
-#  st_transform(crs = 102740)%>%
+  mutate(totpop= DP05_0001E,
+         ppov=DP03_0119PE) %>%
+  st_transform(crs = 2919)%>%
   na.omit()
 
 ```
 
 ## Write data out to shapefile
-```{r, message=FALSE, warning=FALSE, eval=F}
-#change the directory
-sf::st_write(sa_acs2,dsn="C:/Users/ozd504/OneDrive - University of Texas at San Antonio/classes/gis_classwork",layer="sa_tr_dp03", driver="ESRI Shapefile")
+You may need to create or modify some data in R and then use it in the desktop GIS (QGIS), we can write any data from R into a variety of data formats using the  `sf::st_write()` function.
+
+
+```{r, message=FALSE, warning=FALSE, eval=FALSE}
+#change the directory for your computer
+sf::st_write(sa_acs2,
+             dsn="../data/sa_tr_dp03",
+             layer="sa_tr_dp03",
+             driver="GPKG") ## Save as geopackage format - QGIS likes this
 
 ```
 
 \newpage
 
 ## Some basic mapping of variables
-Here I generate a quantile break for % black in census tracts and compare it to a Jenks break
+Here I generate a quantile break for % black in census tracts and compare it to a Jenks break. *Note* in ggplot, the Jenks break is harder to do
 ```{r, message=FALSE, fig.width=12, fig.height=8}
 
-library(classInt)
 library(patchwork)
-library(dplyr)
+library(ggsn)
+library(XploreR)
+source("https://raw.githubusercontent.com/coreysparks/Rcode/master/mutate_map_funs.R")
 
 ppov_map<-sa_acs2 %>%
-  mutate(cpov=cut(ppov,breaks = quantile(ppov, na.rm=T, p=seq(0,1,length.out = 6)),include.lowest = T),
-           jpov = cut(ppov,breaks=data.frame(classIntervals(var=sa_acs2$ppov, n=5, style="pretty")[2])[,1], include.lowest = T))
+  mutate_map_brks(ppov, n=6, style="quantile")%>%
+           mutate_map_brks(ppov, n=6, style="jenks")
 
-library(ggsn)
 
-p1<-ggplot(ppov_map, aes(fill = cpov)) + 
+
+p1<-ggplot(ppov_map, aes(fill = ppov_qbrks)) + 
   geom_sf(color="grey50") + 
   ggtitle("Proportion in poverty", 
           subtitle = "Bexar County Texas, 2017 - Quantile Breaks")+
     scale_fill_brewer(palette = "Reds") + 
   scale_color_brewer(palette = "Reds")+
-  theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank())+
   north(ppov_map)+
-  scalebar(ppov_map, location="bottomleft", dist=5, transform = T,dist_unit = "km",  model="WGS84", st.size =2 )
+  scalebar(ppov_map, location="bottomleft",
+           dist=5, transform = T,
+           dist_unit = "km",
+           model="WGS84",
+           st.size =2 )
 p1
 
 
 
-p2<-ggplot(ppov_map, aes(fill = jpov)) + 
+p2<-ggplot(ppov_map, aes(fill = ppov_jbrks)) + 
   geom_sf(color="grey50") + 
   ggtitle("Proportion in Poverty", 
           subtitle = "Bexar County Texas, 2017 - Jenks Breaks")+
   scale_fill_brewer(palette = "Reds") + 
   scale_color_brewer(palette = "Reds")+
-    theme(axis.text.x = element_blank(), axis.text.y = element_blank())+
+    theme(axis.text.x = element_blank(),
+          axis.text.y = element_blank())+
   north(ppov_map)+
-  scalebar(ppov_map, location="bottomleft", dist=5, transform = T,dist_unit = "km",  model="WGS84", st.size =2)
+  scalebar(ppov_map, 
+           location="bottomleft",
+           dist=5,
+           transform = T,
+           dist_unit = "km",
+           model="WGS84",
+           st.size =2)
 p2
   
 p1+ p2
 
 ```
 
+You can save the image from above to your computer by using `ggsave()`
 ```{r, eval=FALSE}
-ggsave(filename="C:/Users/ozd504/OneDrive - University of Texas at San Antonio//classes/gis_classwork/lab1map1.png")
+ggsave(filename="../images/lab1map1.png",
+       dpi = "print")
 
 ```
 
 ### Slightly easier way using `tmap`
+
+The `tmap` package is an attractive alternative to using `ggplot()` when making maps, and makes basic cartographic principles easier.
+
+*Note* `style="fisher"` is equivalent to `style="jenks"` and scales better to larger data.
 
 ```{r}
 library(tmap)
 library(tmaptools)
 
 tm_shape(sa_acs2)+
-  tm_polygons("ppov", title="% in Poverty", palette="Blues", style="quantile", n=5 )+
-  tm_format("World", title="San Antonio Poverty Estimates - Quantile Breaks", legend.outside=T)+
+  tm_polygons("ppov",
+              title="% in Poverty",
+              palette="Blues",
+              style="quantile", n=5 )+
+  tm_format("World",
+            title="San Antonio Poverty Estimates - Quantile Breaks",
+            legend.outside=T)+
   tm_scale_bar()+
   tm_compass()
 
 tm_shape(sa_acs2)+
-  tm_polygons("ppov", title="% in Poverty", palette="Blues", style="jenks", n=5,legend.hist=T )+
-  tm_format("World", title="San Antonio Poverty Estimates - Jenks Breaks", legend.outside=T)+
+  tm_polygons("ppov",
+              title="% in Poverty",
+              palette="Blues",
+              style="fisher",
+              n=5,
+              legend.hist=T )+
+  tm_format("World",
+            title="San Antonio Poverty Estimates - Jenks Breaks",
+            legend.outside=T)+
   tm_scale_bar()+
   tm_compass()
 
@@ -145,9 +207,15 @@ tm_shape(sa_acs2)+
 ```{r}
 library(mapview)
 library(RColorBrewer)
-ppov_map$jpov<-relevel(ppov_map$jpov,ref = "[0,10]" )
+ppov_map$ppov_jbrks<-relevel(ppov_map$ppov_jbrks,ref = "0-6.7" )
+
 pal <- colorRampPalette(brewer.pal(7, "Blues")) #set colors
-mapview(ppov_map, zcol="jpov",  legend=T,map.types="OpenStreetMap", layer.name="% in Poverty")
+
+mapview(ppov_map,
+        zcol="ppov_jbrks",
+        legend=T,
+        map.types="OpenStreetMap",
+        layer.name="% in Poverty")
 
 
 ```

@@ -1,16 +1,8 @@
 ---
 title: "Homework1 example"
 author: "Corey Sparks PhD"
-date: "`r format(Sys.time(), '%d %B, %Y')`"
-output:
-   html_document:
-    df_print: paged
-    fig_height: 7
-    fig_width: 7
-    toc: yes
-    toc_float: yes
-    code_download: true
-always_allow_html: yes
+date: "January 19, 2022"
+output: html_document
 ---
 
 
@@ -20,4 +12,5 @@ always_allow_html: yes
 
 Use a screen capture tool to take a capture of you R session showing version 4.1.2
 
-![](../images/hw1.png)
+![this is my R](C:/Users/ozd504/dem7903/hw1r.png)
+![this is my QGIS](C:/Users/ozd504/dem7903/hw1_2.png)

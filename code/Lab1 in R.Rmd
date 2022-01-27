@@ -26,7 +26,7 @@ library(classInt)
 ### Examine data profile tables
 The `load_variables()` function will load all available variables in the ACS for a given year
 ```{r}
-v15_Profile <- load_variables(year = 2017 ,
+v15_Profile <- load_variables(year = 2019 ,
                               dataset =  "acs5/profile",
                               cache = TRUE)
 
@@ -66,7 +66,7 @@ Using `output="wide"` will put each variable in a column of the data set, with e
 sa_acs<-get_acs(geography = "tract",
                 state="TX",
                 county = "Bexar",
-                year = 2017,
+                year = 2019,
                 variables=c("DP05_0001E", "DP03_0119PE") ,
                 geometry = T,
                 output = "wide")
@@ -95,7 +95,7 @@ You may need to create or modify some data in R and then use it in the desktop G
 ```{r, message=FALSE, warning=FALSE, eval=FALSE}
 #change the directory for your computer
 sf::st_write(sa_acs2,
-             dsn="../data/sa_tr_dp03",
+             dsn="../data/sa_tr_dp03.gpkg",
              layer="sa_tr_dp03",
              driver="GPKG") ## Save as geopackage format - QGIS likes this
 
@@ -207,7 +207,7 @@ tm_shape(sa_acs2)+
 ```{r}
 library(mapview)
 library(RColorBrewer)
-ppov_map$ppov_jbrks<-relevel(ppov_map$ppov_jbrks,ref = "0-6.7" )
+ppov_map$ppov_jbrks<-relevel(ppov_map$ppov_jbrks,ref = "0-5.5" )
 
 pal <- colorRampPalette(brewer.pal(7, "Blues")) #set colors
 

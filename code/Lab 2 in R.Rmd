@@ -60,9 +60,13 @@ library(tmap)
 library(tmaptools)
 
 tm_shape(sa_acs2)+
-  tm_polygons("ppov", title="% in Poverty", palette="Blues", style="quantile", n=5 )+
-  tm_format("World", title="San Antonio Poverty Estimates - Quantile Breaks", legend.outside=T)+
-  tm_scale_bar()+
+  tm_polygons("ppov", title="% in Poverty",
+              palette="Blues",
+              style="quantile",
+              n=5 )+
+  tm_format("World", 
+            title="San Antonio Poverty Estimates\n- Quintile Breaks", legend.outside=T)+
+  tm_scale_bar(position = c("left","bottom"))+
   tm_compass()
 
 

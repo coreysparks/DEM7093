@@ -74,6 +74,7 @@ sa_acs<-get_acs(geography = "tract",
 head(sa_acs)
 ```
 
+
 Here, I create some other variables that we may need later
 ```{r}
 # create a county FIPS code - 5 digit
@@ -88,6 +89,13 @@ sa_acs2<-sa_acs%>%
 
 ```
 
+```{r}
+st_geometry(sa_acs2)<-NULL
+foreign::write.dbf(as.data.frame(sa_acs2), file="../data/acs_lab1.dbf")
+```
+
+
+
 ## Write data out to shapefile
 You may need to create or modify some data in R and then use it in the desktop GIS (QGIS), we can write any data from R into a variety of data formats using the  `sf::st_write()` function.
 
@@ -100,6 +108,13 @@ sf::st_write(sa_acs2,
              driver="GPKG") ## Save as geopackage format - QGIS likes this
 
 ```
+
+```{r}
+mydat<- st_read("../data/sa_tr_dp03.gpkg")
+
+names(mydat)
+```
+
 
 \newpage
 

@@ -22,7 +22,7 @@ In this example, we will geocode addresses using the Census Bureau's batch geoco
 We will use the from the CSV created in the [Lab 3 exercise](https://docs.google.com/document/d/e/2PACX-1vRe4u2C465ng7QW5xkPf06xZqxkup3FpS3cQkZQugMVyVN_uc7AsGJmd_9CEWWWhx1RRY33MERQeNwP/pub).
 
 ```{r}
-addr<-read.csv(url("https://raw.githubusercontent.com/coreysparks/data/master/wic_west_side.csv"))
+addr<-read.csv(url("https://github.com/coreysparks/data/blob/master/wic_west_side.csv?raw=true"))
 addr<-addr[c(6, 12:14)]
 names(addr)<-c("street", "city", "st", "zip")
 head(addr)

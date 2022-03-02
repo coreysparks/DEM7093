@@ -1,8 +1,7 @@
 ---
 title: "Intro to Point Pattern Analysis using R and QGIS"
 author: "Corey Sparks, Ph.D."
-date: "March 17, 2021"
-always_allow_html: yes
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
    html_document:
     df_print: paged
@@ -10,6 +9,8 @@ output:
     fig_width: 7
     toc: yes
     toc_float: yes
+always_allow_html: yes
+download_code: yes    
 ---
 
 This example shows how to use R and QGIS from within R to perform a series of common point pattern analysis techniques. 
@@ -24,59 +25,49 @@ library(sf)
 library(censusxy)
 library(dplyr)
 ```
-
+## Create point layer from grocery data from AtoZdatabase
+#### just use the lat / long information in the data!
 ```{r}
-addr<-read.csv(url("https://raw.githubusercontent.com/coreysparks/data/master/wic_west_side.csv"))
-addr<-addr[c(6, 12:14)]
-names(addr)<-c("street", "city", "st", "zip")
-head(addr)
+addr<-read.csv(url("https://raw.githubusercontent.com/coreysparks/DEM7093/main/data/west_side_groceries.csv"))
+addr <- addr%>%
+  dplyr::select(names(addr)[c(4,6,14,23:24,41,42)])
 
-results<-cxy_geocode(addr,
-                     street = "street",
-                     city = "city",
-                     state ="st",
-                     zip = "zip",
-                     class="sf",
-                     output = "simple")
-results.proj<-st_transform(results,
-                           crs = 2278)
-
-```
-####  OR just use the lat / long information in the data!
-```{r}
-addr<-read.csv(url("https://raw.githubusercontent.com/coreysparks/data/master/wic_west_side.csv"))
 results <- st_as_sf(addr, coords=c("Longitude", "Latitude"), crs=4269,agr="constant")
+
 results.proj<-st_transform(results,
                            crs = 2278)
 
 ```
 
 
+
+
 ```{r}
-mv1= mapview(results.proj)
+mv1 <- mapview(results.proj)
 mapshot(mv1, file = paste0(getwd(), "/map1.png"))
 
+
+mv1
+```
+
+```{r}
 library(tmap)
 library(tmaptools)
 library(OpenStreetMap)
 bg<-  read_osm(results.proj, ext=1.1)
 
-tmap_mode("plot")
+tmap_mode("view")
 tm_basemap("OpenStreetMap.Mapnik")+
   tm_shape(results.proj)+
   tm_dots()
 
+tmap_mode("plot")
+```
+
+```{r}
 library(ggplot2)
 library(ggmap)
 library(ggspatial)
-
-sa_map <- get_map( c(-98.5,29.43 ), zoom = 13)
-ggmap(sa_map)
-
-ggmap(sa_map) +geom_sf(data=results.proj, aes(Primary.SIC)) +coord_sf(crs = st_crs(4269))
-
-res<-st_transform(results.proj, 4326)
-
 library(leaflet)
 leaflet() %>%
   addTiles()%>%
@@ -109,12 +100,20 @@ tm_basemap("OpenStreetMap.Mapnik")+
 
 ## Central feature - Median of coordinates
 ```{r}
-median_feature<-apply(st_coordinates(results.proj), MARGIN = 2, FUN = median)
-median_feature<-data.frame(place="medianfeature", x=median_feature[1], y= median_feature[2])
-median_feature<-st_as_sf(median_feature, coords = c("x", "y"), crs= 2278)
+median_feature<-apply(st_coordinates(results.proj),
+                      MARGIN = 2,
+                      FUN = median)
+
+median_feature<-data.frame(place="medianfeature",
+                           x=median_feature[1],
+                           y= median_feature[2])
+
+median_feature<-st_as_sf(median_feature,
+                         coords = c("x", "y"),
+                         crs= 2278)
 
 
-tmap_mode("plot")
+tmap_mode("view")
 tm_basemap("OpenStreetMap.Mapnik")+
   tm_shape(results.proj)+
   tm_dots(col = "green", size = .2)+
@@ -129,13 +128,13 @@ tm_basemap("OpenStreetMap.Mapnik")+
 
 ## Buffer points
 ```{r}
-wicbuff<- st_buffer(results.proj, dist = 2500)
+grocery_buff<- st_buffer(results.proj, dist = 1000)
 
-tmap_mode("plot")
+#tmap_mode("plot")
 tm_basemap("OpenStreetMap.Mapnik" )+
   tm_shape(results.proj, is.master = T)+
   tm_dots(col = "green")+
-  tm_shape(wicbuff)+
+  tm_shape(grocery_buff)+
   tm_polygons(col = "red", alpha = .1)
 
 
@@ -146,7 +145,7 @@ tm_basemap("OpenStreetMap.Mapnik" )+
 ```{r}
 chull <- st_convex_hull(st_union(results))
 
-tmap_mode("plot")
+tmap_mode("view")
 tm_basemap("OpenStreetMap.Mapnik")+
   tm_shape(results.proj)+
   tm_dots(col = "green")+
@@ -156,8 +155,29 @@ tm_basemap("OpenStreetMap.Mapnik")+
 ```
 
 
-## kernel density  - You need projected data for this to work right
-R can do kernel density maps, but using simple features it's kind of complicated. I will use Qgis through R instead using the `qgisprocess` [package](https://github.com/paleolimbot/qgisprocess)
+## kernel density  - 
+### You need projected data for this to work right
+
+R can do kernel density maps, but using simple features it's kind of complicated. Here is one way to do this using the `SpatialKDE` package:
+
+```{r, message=FALSE, warning=FALSE}
+
+library(SpatialKDE)
+
+grid_groc <- results.proj %>%
+  create_grid_rectangular(cell_size = 1000, side_offset = 2000)
+
+kde <- results.proj%>%
+  kde(band_width = 2000, kernel= "quartic", grid = grid_groc)
+
+tm_shape(kde)+
+  tm_polygons(col = "kde_value", palette= "viridis", title = "Density Estimate")+
+  tm_shape(results.proj)+
+  tm_dots()
+
+```
+
+Alternatively, you can use Qgis through R instead using the `qgisprocess` [package](https://github.com/paleolimbot/qgisprocess)
 
 ```{r}
 library(qgisprocess)
@@ -176,10 +196,13 @@ qgis_show_help("qgis:heatmapkerneldensityestimation")
 ```
 
 Run the algorithm
-```{r, message=FALSE, warning=FALSE}
+
+
+```{r}
+
 wic_dens<-qgis_run_algorithm(algorithm ="qgis:heatmapkerneldensityestimation",
          INPUT=results.proj,
-         RADIUS = 5000,
+         RADIUS = 2000,
          PIXEL_SIZE = 100,
          KERNEL = 0,
          OUTPUT=file.path(getwd(), "wicdenst.TIF"),
@@ -191,7 +214,7 @@ result<- qgis_as_raster(wic_dens)
 
 projection(result)<-crs(results.proj)
 
-tmap_mode("plot")
+tmap_mode("view")
 tm_basemap("OpenStreetMap.Mapnik")+
   tm_shape(result)+
   tm_raster()+
@@ -207,40 +230,40 @@ A spatial join can combine attributes of one layer with another layer. Here I co
 
 ```{r, results="hide"}
 library(tidycensus)
-library(dplyr)
+
 #load census tract data
 sa_acs<-get_acs(geography = "tract",
                 state="TX",
                 county = "Bexar", 
                 year = 2019,
-                variables=c( "DP05_0001E", "DP03_0009P", "DP03_0062E", "DP03_0119PE",
-                           "DP05_0001E","DP02_0009PE","DP02_0008PE","DP02_0040E","DP02_0038E",
-                            "DP02_0066PE","DP02_0067PE","DP02_0080PE","DP02_0092PE",
-                        "DP03_0005PE","DP03_0028PE","DP03_0062E","DP03_0099PE","DP03_0101PE",
-                            "DP03_0119PE","DP04_0046PE","DP05_0072PE","DP05_0073PE",
-                            "DP05_0066PE", "DP05_0072PE", "DP02_0113PE") ,
+                variables=c( "DP05_0001E", "DP03_0062E",
+                             "DP03_0119PE","DP02_0066PE",
+                             "DP03_0062E","DP03_0119PE",
+                             "DP05_0073PE","DP05_0066PE") ,
                 geometry = T, output = "wide")
 
 #rename variables and filter missing cases
 sa_acs2<-sa_acs%>%
-  mutate(totpop= DP05_0001E, pwhite=DP05_0072PE, 
-         pblack=DP05_0073PE , phisp=DP05_0066PE,
-         phsormore=DP02_0066PE,punemp=DP03_0009PE, medhhinc=DP03_0062E,
+  mutate(totpop= DP05_0001E,
+         pblack=DP05_0073PE,
+         phisp=DP05_0066PE,
+         phsormore=DP02_0066PE,
+         medhhinc=DP03_0062E,
          ppov=DP03_0119PE)%>%
-  dplyr::select(GEOID, totpop, pblack, pwhite, phisp, punemp, medhhinc, ppov)
+  dplyr::select(GEOID, totpop, pblack, phisp, medhhinc, ppov)
 
 sa_acs2<-st_transform(sa_acs2, crs = 2278)
-sa_trol<-st_cast(sa_acs2, "MULTILINESTRING")
+sa_trol<-st_cast(sa_acs2, "MULTILINESTRING") #make outline
 ```
 
 ```{r}
 spjoin<-st_join(results.proj, sa_acs2)
 #head(spjoin)
 
-tmap_mode("plot")
+tmap_mode("view")
 tm_basemap("OpenStreetMap.Mapnik")+
   tm_shape(spjoin, is.master = T)+
-  tm_dots("punemp", size = .1)+
+  tm_dots("ppov", size = .1)+
   tm_shape(sa_acs2)+
   tm_polygons(alpha = .1)
 
@@ -252,13 +275,14 @@ tm_basemap("OpenStreetMap.Mapnik")+
 Point in polygon operations are actually a spatial intersection (more on this next week!) where we see how many points fall within a given polygon. 
 
 ```{r}
-sa_acs2$nwic<- lengths(st_intersects(sa_acs2, results.proj))
+sa_acs2$ngroc<- lengths(st_intersects(sa_acs2, results.proj))
 
+sa_acs2$groc_pc <- 1000*(sa_acs2$ngroc/sa_acs2$totpop)
 
 tmap_mode("plot")
 m<-tm_basemap("OpenStreetMap.Mapnik")+
   tm_shape(sa_acs2)+
-  tm_polygons("nwic")+
+  tm_polygons("groc_pc")+
   tm_shape(spjoin, is.master = T)+
   tm_dots( size = .01)
 
@@ -268,7 +292,7 @@ m
 
 
 ## Thiessen/Voronoi Polygons
-Thiessen or Voronoi polygons are a process where we can convert points into polygons.
+Thiessen or Voronoi polygons are a process where we can convert points into polygons. I use QGIS to do this, R has issues. 
 
 ```{r}
 algs[grepl(pattern = "voronoi", x = algs$algorithm ),]
@@ -287,11 +311,10 @@ wic_von<-sf::read_sf(qgis_output(wic_von, "OUTPUT"))
 tmap_mode("view")
 map1<-tm_basemap("OpenStreetMap.Mapnik")+
   tm_shape(wic_von)+
-  tm_polygons(col="grey")+
+  tm_polygons(col="grey", alpha=.4)+
   tm_shape(results.proj)+
   tm_dots( size = .01)
  
- current.mode <- tmap_mode("plot")
 
 # plot map
 map1
@@ -299,6 +322,7 @@ map1
 
 
 ## Nearest Neighbor analysis
+Nearest neighbor analysis is used to test if a pattern of points is distrubuted randomly or clustered.
 
 ```{r, message=FALSE, warning=FALSE, results='hide'}
 library(spatstat)
@@ -313,6 +337,7 @@ qgis_show_help("native:nearestneighbouranalysis")
 ```
 
 
+Here I use QGIS to get a single test of the randomness
 
 ```{r}
 
@@ -322,5 +347,5 @@ wic_nn<-qgis_run_algorithm(alg="native:nearestneighbouranalysis",
         OUTPUT_HTML_FILE=file.path(tempdir(), "wicnn.html"),
          load_output = TRUE)
 
-
+wic_nn
 ```

@@ -298,7 +298,7 @@ Thiessen or Voronoi polygons are a process where we can convert points into poly
 algs[grepl(pattern = "voronoi", x = algs$algorithm ),]
 qgis_show_help("qgis:voronoipolygons")
 ```
-```{r, message=FALSE, warning=FALSE, results='hide'}
+```{r, message=FALSE, warning=FALSE}
 
 
 wic_von<-qgis_run_algorithm(alg="qgis:voronoipolygons",

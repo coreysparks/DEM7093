@@ -176,7 +176,8 @@ tm_shape(age.tract)+
 So, we can find the ratio of each tract's area within the school district, and divide it by the original area of the tract. This gives us the proportion of the area of a tract within a given district. Once we have this, we can multiply the population by the proportion, and we will have a proportion of the population of that tract within a district:
 
 ```{r}
-sdtract$apparea<-st_area(sdtract) #area of intersected tracts
+sdtract$apparea<-st_area(sdtract)
+sdtract$area_ratio <- sdtract$apparea/sdtract$area#area of intersected tracts
 sdtract$app_kids<-sdtract$totalkidsu5*(sdtract$apparea/sdtract$area) #apportion population
 
 hist(sdtract$apparea/sdtract$area, main="Proportion of tract within a district")

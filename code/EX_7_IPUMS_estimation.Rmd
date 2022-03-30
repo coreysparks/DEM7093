@@ -31,44 +31,50 @@ Be sure the `ipumsr` package is installed.
 
 ```{r}
 library(ipumsr)
-ddi <- read_ipums_ddi("~/OneDrive - University of Texas at San Antonio/classes//gis_classwork/usa_00083.xml")
+ddi <- read_ipums_ddi("C:/Users/ozd504//OneDrive - University of Texas at San Antonio//gis_classwork/usa_00083.xml")
 data <- read_ipums_micro(ddi)
-data<-haven::zap_labels(data) #necessary to avoid problems with "labeled" data
-
+data<-haven::zap_labels(data) #necessary to avoid problems with "labelled" data class
+names(data)<-tolower(names(data))
 ```
 
 ## Load some other packages
 ```{r, message=FALSE}
-library(survey)
-library(dplyr)
-library(car)
-library(ggplot2)
-library(tigris)
-library(classInt)
-library(tmap)
+library(survey, quietly = T)
+library(tidyverse, quietly = T)
+library(car, quietly = T)
+library(ggplot2, quietly = T)
+library(tigris, quietly = T)
+library(classInt, quietly = T)
+library(tmap, quietly = T)
 
 ```
 
 
 ### Download geographic data for Public Use Microdata Areas
-```{r}
-options(tigris_class = "sf")
-pumas<-pumas(state = "TX", year = 2018, cb = T)
-plot(pumas["GEOID10"], main = "Public Use Microdata Areas in Texas")
-mapview(pumas, zcol= "GEOID10")
-```
+The Public Use Microdata Area is the lowest level of geography in the PUMS data. They correspond to greographic ares of ~ 100,000 people. 
 
 ```{r}
-names(data)<-tolower(names(data))
+options(tigris_class = "sf")
+pumas<-pumas(state = "TX",
+             year = 2018,
+             cb = T)
+
+
+plot(pumas["GEOID10"],
+     main = "Public Use Microdata Areas in Texas")
+
+
+mapview::mapview(pumas, zcol= "GEOID10")
 ```
+
 
 ## Prepare variables
 Here I recode several demographic variables
 
 ```{r}
-#weight variables, these have implied decimal places so we have to divde by 100, following the codebook
-data$pwt <- data$perwt/100
-data$hwt <- data$hhwt/100
+
+data$pwt <- data$perwt
+data$hwt <- data$hhwt
 
 #race/ethnicity
 data$hisp <- Recode(data$hispan, recodes = "9=NA; 1:4='Hispanic'; 0='NonHispanic'")
@@ -113,7 +119,7 @@ des<-svydesign(ids = ~cluster,
 ```
 
 ## perform survey estimation for PUMAs
-The `svyby()` function allows us calculate estimates for different **sub-domains** within the data, this could be a demographic characteristic, but we'll use our geographic level. 
+The `svyby()` function allows us calculate estimates for different **sub-domains** within the data, this could be a demographic characteristic, but we'll use our geographic level. Of course you could do both.... 
 
 ```{r}
 test<-svytable(~I(cit=="US born")+puma+sex, design=des )
@@ -135,31 +141,37 @@ puma_est_industry<-svyby(formula = ~proftech,
                          design = subset(des, employed==1),
                          FUN = svymean,
                          na.rm = TRUE )
+```
 
+
+```{r}
 library(reldist)
 gini.puma<-data%>%
   filter(income >0, is.na(income)==F)%>%
   group_by( puma, race_eth)%>%
   summarize(ineq = gini(income, weights = pwt))%>%
   ungroup()
+```
 
 
+```{r}
 head(puma_est_edu)
 head(puma_est_employ)
 head(puma_est_industry)
 ```
 
 ## join to geography
+
 ```{r}
 pumas$puma<-as.numeric(pumas$PUMACE10)
 
-geo1<-geo_join(pumas, puma_est_employ, by_sp="puma",by_df= "puma")
+geo1<-left_join(pumas, puma_est_employ, by=c("puma"= "puma"))
 head(geo1)
 
-geo2<-geo_join(pumas, puma_est_industry, by_sp="puma",by_df= "puma")
+geo2<-left_join(pumas, puma_est_industry, by=c("puma"= "puma"))
 head(geo2)
 
-geo3<-geo_join(pumas, gini.puma, by_sp="puma",by_df= "puma")
+geo3<-left_join(pumas, gini.puma, by=c("puma"= "puma"))
 head(geo2)
 
 ```
@@ -171,8 +183,8 @@ head(geo2)
 
 tmap_mode("view")
 
-tm_basemap("OpenStreetMap.Mapnik")+
-  tm_shape(geo1)+
+geo1%>%
+  tm_shape()+
   tm_polygons("employed",
               style="kmeans",
               n=8,
@@ -185,27 +197,27 @@ tm_basemap("OpenStreetMap.Mapnik")+
 
 ```{r}
 #tmap_mode("plot")
-tmap_leaflet(tm_basemap("OpenStreetMap.Mapnik")+
-  tm_shape(geo2)+
+geo2%>%
+  tm_shape()+
   tm_polygons("proftech",
               style="kmeans",
               n=8,
               legend.hist = TRUE) +
  tm_layout(legend.outside = TRUE,
-            title = "Employment rate in Texas PUMAs \n 2014-2018")  )
+            title = "Employment rate in Texas PUMAs \n 2014-2018")  
 
 ```
 
 ```{r}
-tmap_mode("plot")
-tmap_leaflet(tm_basemap("OpenStreetMap.Mapnik")+
-  tm_shape(geo3)+
+  
+geo3%>%
+tm_shape()+
   tm_polygons("ineq",
               style="kmeans",
               n=8,
               legend.hist = TRUE) +
  tm_layout(legend.outside = TRUE,
-            title = "Employment rate in Texas PUMAs \n 2014-2018")  )
+            title = "Employment rate in Texas PUMAs \n 2014-2018")  
 
 ```
 
@@ -251,7 +263,7 @@ head(met_est_industry)
 
 ```{r}
 mets$met2013<-as.numeric(mets$GEOID)
-geo3<-geo_join(mets, met_est_employ,by_sp= "met2013",by_df= "met2013")
+geo3<-left_join(mets, met_est_employ,by=c("met2013"= "met2013"))
 
 ```
 
@@ -259,8 +271,8 @@ Note, grey Metros are ones that are not identified in the ACS
 ```{r}
 tmap_mode("view")
 
-tm_basemap("OpenStreetMap.Mapnik")+
-  tm_shape(geo3)+
+geo3%>%
+  tm_shape()+
   tm_polygons("employed",
               style="kmeans",
               n=8,
@@ -307,12 +319,12 @@ Again, the ACS doesn't identify counties in the microdata except for those count
 cos$cofip<-as.numeric(cos$COUNTYFP)
 
 
-geo4<-geo_join(cos, cos_est_employ,by_sp= "cofip",by_df= "countyfip")
+geo4<-left_join(cos, cos_est_employ,by=c("cofip"= "countyfip"))
 
 tmap_mode("view")
 
-tm_basemap("OpenStreetMap.Mapnik")+
-  tm_shape(geo4)+
+geo4%>%
+  tm_shape()+
   tm_polygons("employed",
               style="kmeans",
               n=8,

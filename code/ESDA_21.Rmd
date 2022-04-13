@@ -101,7 +101,7 @@ library(sf)
 library(ggplot2)
 library(rgdal)
 library(dplyr)
-dat<-st_read(dsn = "~/OneDrive - University of Texas at San Antonio/classes//dem7263/class19_7263/data", layer = "SA_classdata")
+dat<-st_read(dsn = "../data", layer = "SA_classdata")
 
 dat$decade<-cut(dat$MEDYRBLT, breaks = 4)
 ```
@@ -469,7 +469,7 @@ Likewise, possible values include light blue polygons, these are called low-high
 
 ```{r, include=FALSE}
 #
-pa<-st_read(dsn = "~/OneDrive - University of Texas at San Antonio/classes/dem7263/class19_7263/data", layer = "PA_income")
+pa<-st_read(dsn = "../data", layer = "PA_income")
 pa<-pa[which(is.na(pa$mednncm)==F)&pa$COUNTYF=="101",]
 
 pa<-pa%>%
@@ -528,7 +528,10 @@ colors <- c("red", "blue", "lightpink", "skyblue2", "white")
 ```
 
 ```{r}
-plot(pa["COUNTYF"], col = colors[np], main="Moran LISA Cluster Map - Median Household income",sub=" Philadelphia County, PA")  #colors[np] manually sets the color for each county
+plot(pa["COUNTYF"], 
+     col = colors[np],
+     main="Moran LISA Cluster Map - Median Household income",
+     sub=" Philadelphia County, PA")  #colors[np] manually sets the color for each county
 legend("topleft", legend = labels, fill = colors, bty = "n")
 
 ```
@@ -618,10 +621,17 @@ plot(knn3, coords=coordinates(as(dat, "Spatial")), add=T, col=2)
 
 
 ```{r}
-plot(as(dat, "Spatial"), main="Rook Neighbors", xlim=c(541365,552287), ylim=c(3249520, 3261021))
-plot(salw, coords=coordinates(as(dat, "Spatial")), add=T, col=2)
+plot(as(dat, "Spatial"),
+     main="Rook Neighbors",
+     xlim=c(541365,552287),
+     ylim=c(3249520, 3261021))
+plot(salw, coords=coordinates(as(dat, "Spatial")),
+     add=T, col=2)
 
-plot(as(dat, "Spatial"), main="k=3 Neighbors",xlim=c(541365,552287), ylim=c(3249520, 3261021))
+plot(as(dat, "Spatial"), main="k=3 Neighbors",
+     xlim=c(541365,552287),
+     ylim=c(3249520, 3261021))
+
 plot(knn3, coords=coordinates(as(dat, "Spatial")), add=T, col=2)
 
 ```
@@ -630,6 +640,7 @@ An example of generating  locally weighted values:
 
 ```{r}
 wmat<-nb2mat(sanb, style="W")
+
 dat$mort.w<-wmat%*%(dat$mortrate)
 
 head(dat[, c("mortrate", "mort.w")])
@@ -650,7 +661,7 @@ moran.plot(dat$mortrate, listw=salw)
 We next perform the Local Moran Analysis
 ```{r}
 #Here, I use the false discovery rate correction, to adjust the p-value for all the tests, similar to a Bonferroni correction in ANOVA
-locali<-localmoran(dat$mortrate, salw, p.adjust.method="fdr")
+locali<-localmoran(dat$mortrate, salw )
 dat$locali<-locali[,1]
 dat$localp<-locali[,5]
 

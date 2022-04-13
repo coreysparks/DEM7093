@@ -536,6 +536,34 @@ legend("topleft", legend = labels, fill = colors, bty = "n")
 
 ```
 
+### using `rgeoda`
+
+```{r}
+
+library(rgeoda)
+wts<- queen_weights(pa)
+
+inc <- pa["mednncm"]
+
+local_moran(wts, df = inc)
+lisa <- local_moran(wts, df = inc)
+lisa_colors <- lisa_colors(lisa)
+lisa_clusters<- lisa_clusters(lisa)
+lisa_labels <- lisa_labels(lisa)
+
+lisa_labels(lisa)
+pa$lisa_clust <- lisa_clusters(lisa)
+
+plot(st_geometry(pa), 
+     col=sapply(lisa_clusters, function(x){return(lisa_colors[[x+1]])}), 
+     border = "#333333", lwd=0.2)
+title(main = "Local Moran Map of Median Income in Philadelphia")
+legend('bottomleft', legend = lisa_labels, fill = lisa_colors, border = "#eeeeee")
+
+```
+
+
+
 There are of course other autocorrelation statistics. For instance Geary's C
 
 ### Geary's C
